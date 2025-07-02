@@ -67,10 +67,6 @@ public:
     }
 };
 
-// Static member definitions
-LogLevel Logger::current_level = LogLevel::INFO;
-std::mutex Logger::log_mutex;
-
 // Convenience macros
 #define LOG_DEBUG(client_id, msg) \
     do { \

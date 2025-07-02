@@ -130,8 +130,14 @@ else()
     include_directories(${Boost_INCLUDE_DIRS})
 endif()
 
-# Create executables
-add_executable(websocket_asr_server websocket_asr_server.cpp)
+# Create executables with multiple source files
+add_executable(websocket_asr_server 
+    main.cpp
+    src/asr_engine.cpp
+    src/asr_session.cpp
+    src/websocket_server.cpp
+    src/logger.cpp
+)
 
 # Link libraries for websocket_asr_server
 target_link_libraries(websocket_asr_server
