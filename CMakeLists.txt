@@ -8,68 +8,87 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
 
-# add ./include directory
+# Add local include directory
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-# Try to find sherpa-onnx via pkg-config first
-pkg_check_modules(SHERPA_ONNX sherpa-onnx)
+# Find sherpa-onnx (required - must be pre-installed)
+# First try to find via CMake config
+find_package(sherpa-onnx QUIET CONFIG)
 
-if(NOT SHERPA_ONNX_FOUND)
-    message(STATUS "sherpa-onnx not found via pkg-config")
-    
-    # Try to find pre-installed libraries
-    find_library(SHERPA_ONNX_CORE_LIB sherpa-onnx-core PATHS /usr/local/lib /usr/lib)
-    find_library(SHERPA_ONNX_CXX_API_LIB sherpa-onnx-cxx-api PATHS /usr/local/lib /usr/lib)
-    find_library(SHERPA_ONNX_C_API_LIB sherpa-onnx-c-api PATHS /usr/local/lib /usr/lib)
-    find_library(SHERPA_ONNX_FST_LIB sherpa-onnx-fst PATHS /usr/local/lib /usr/lib)
-    find_library(SHERPA_ONNX_FSTFAR_LIB sherpa-onnx-fstfar PATHS /usr/local/lib /usr/lib)
-    find_library(SHERPA_ONNX_KALDIFST_LIB sherpa-onnx-kaldifst-core PATHS /usr/local/lib /usr/lib)
-    
-    # Find additional required dependencies
-    find_library(ONNXRUNTIME_LIB onnxruntime PATHS /usr/local/lib /usr/lib)
-    find_library(KALDI_DECODER_LIB kaldi-decoder-core PATHS /usr/local/lib /usr/lib)
-    find_library(KALDI_NATIVE_FBANK_LIB kaldi-native-fbank-core PATHS /usr/local/lib /usr/lib)
-    find_library(SSENTENCEPIECE_LIB ssentencepiece_core PATHS /usr/local/lib /usr/lib)
-    find_library(ESPEAK_NG_LIB espeak-ng PATHS /usr/local/lib /usr/lib)
-    find_library(PIPER_PHONEMIZE_LIB piper_phonemize PATHS /usr/local/lib /usr/lib)
-    find_library(KISSFFT_LIB kissfft-float PATHS /usr/local/lib /usr/lib)
-    find_library(UCD_LIB ucd PATHS /usr/local/lib /usr/lib)
-    
-    if(SHERPA_ONNX_CORE_LIB AND SHERPA_ONNX_CXX_API_LIB)
-        set(SHERPA_ONNX_LIBRARIES 
-            ${SHERPA_ONNX_CXX_API_LIB}
-            ${SHERPA_ONNX_C_API_LIB}
-            ${SHERPA_ONNX_CORE_LIB}
-            ${SHERPA_ONNX_FST_LIB}
-            ${SHERPA_ONNX_FSTFAR_LIB}
-            ${SHERPA_ONNX_KALDIFST_LIB}
-            ${ONNXRUNTIME_LIB}
-            ${KALDI_DECODER_LIB}
-            ${KALDI_NATIVE_FBANK_LIB}
-            ${SSENTENCEPIECE_LIB}
-            ${ESPEAK_NG_LIB}
-            ${PIPER_PHONEMIZE_LIB}
-            ${KISSFFT_LIB}
-            ${UCD_LIB}
+if(sherpa-onnx_FOUND)
+    message(STATUS "Found sherpa-onnx via CMake config: ${sherpa-onnx_DIR}")
+    # Create aliases for consistency
+    set(SHERPA_ONNX_LIBRARIES sherpa-onnx::sherpa-onnx)
+    set(SHERPA_ONNX_FOUND TRUE)
+else()
+    # Try to find sherpa-onnx via pkg-config first
+    pkg_check_modules(SHERPA_ONNX sherpa-onnx)
+
+    if(NOT SHERPA_ONNX_FOUND)
+        message(STATUS "sherpa-onnx not found via pkg-config")
+        
+        # Try to find pre-installed libraries
+        find_library(SHERPA_ONNX_CORE_LIB sherpa-onnx-core PATHS /usr/local/lib /usr/lib)
+        find_library(SHERPA_ONNX_CXX_API_LIB sherpa-onnx-cxx-api PATHS /usr/local/lib /usr/lib)
+        find_library(SHERPA_ONNX_C_API_LIB sherpa-onnx-c-api PATHS /usr/local/lib /usr/lib)
+        find_library(SHERPA_ONNX_FST_LIB sherpa-onnx-fst PATHS /usr/local/lib /usr/lib)
+        find_library(SHERPA_ONNX_FSTFAR_LIB sherpa-onnx-fstfar PATHS /usr/local/lib /usr/lib)
+        find_library(SHERPA_ONNX_KALDIFST_LIB sherpa-onnx-kaldifst-core PATHS /usr/local/lib /usr/lib)
+        
+        # Find additional required dependencies
+        find_library(ONNXRUNTIME_LIB onnxruntime PATHS /usr/local/lib /usr/lib)
+        find_library(KALDI_DECODER_LIB kaldi-decoder-core PATHS /usr/local/lib /usr/lib)
+        find_library(KALDI_NATIVE_FBANK_LIB kaldi-native-fbank-core PATHS /usr/local/lib /usr/lib)
+        find_library(SSENTENCEPIECE_LIB ssentencepiece_core PATHS /usr/local/lib /usr/lib)
+        find_library(ESPEAK_NG_LIB espeak-ng PATHS /usr/local/lib /usr/lib)
+        find_library(PIPER_PHONEMIZE_LIB piper_phonemize PATHS /usr/local/lib /usr/lib)
+        find_library(KISSFFT_LIB kissfft-float PATHS /usr/local/lib /usr/lib)
+        find_library(UCD_LIB ucd PATHS /usr/local/lib /usr/lib)
+        
+        # Find include directory
+        find_path(SHERPA_ONNX_INCLUDE_DIR
+            NAMES sherpa-onnx/c-api/c-api.h
+            PATHS /usr/local/include /usr/include
+            DOC "sherpa-onnx include directory"
         )
-        set(SHERPA_ONNX_INCLUDE_DIRS /usr/local/include)
-        set(SHERPA_ONNX_FOUND TRUE)
-        message(STATUS "Found sherpa-onnx libraries:")
-        message(STATUS "  Core: ${SHERPA_ONNX_CORE_LIB}")
-        message(STATUS "  CXX API: ${SHERPA_ONNX_CXX_API_LIB}")
-        message(STATUS "  C API: ${SHERPA_ONNX_C_API_LIB}")
-        message(STATUS "  OnnxRuntime: ${ONNXRUNTIME_LIB}")
-        message(STATUS "  Kaldi Decoder: ${KALDI_DECODER_LIB}")
-        message(STATUS "  Kaldi Native Fbank: ${KALDI_NATIVE_FBANK_LIB}")
+        
+        if(SHERPA_ONNX_CORE_LIB AND SHERPA_ONNX_CXX_API_LIB AND SHERPA_ONNX_INCLUDE_DIR)
+            # Filter out empty/not found libraries
+            set(SHERPA_ONNX_LIBRARIES "")
+            foreach(lib ${SHERPA_ONNX_CXX_API_LIB} ${SHERPA_ONNX_C_API_LIB} ${SHERPA_ONNX_CORE_LIB} 
+                         ${SHERPA_ONNX_FST_LIB} ${SHERPA_ONNX_FSTFAR_LIB} ${SHERPA_ONNX_KALDIFST_LIB}
+                         ${ONNXRUNTIME_LIB} ${KALDI_DECODER_LIB} ${KALDI_NATIVE_FBANK_LIB}
+                         ${SSENTENCEPIECE_LIB} ${ESPEAK_NG_LIB} ${PIPER_PHONEMIZE_LIB}
+                         ${KISSFFT_LIB} ${UCD_LIB})
+                if(lib AND NOT lib STREQUAL "lib-NOTFOUND")
+                    list(APPEND SHERPA_ONNX_LIBRARIES ${lib})
+                endif()
+            endforeach()
+            
+            set(SHERPA_ONNX_INCLUDE_DIRS ${SHERPA_ONNX_INCLUDE_DIR})
+            set(SHERPA_ONNX_FOUND TRUE)
+            message(STATUS "Found sherpa-onnx libraries:")
+            message(STATUS "  Core: ${SHERPA_ONNX_CORE_LIB}")
+            message(STATUS "  CXX API: ${SHERPA_ONNX_CXX_API_LIB}")
+            message(STATUS "  C API: ${SHERPA_ONNX_C_API_LIB}")
+            message(STATUS "  Include: ${SHERPA_ONNX_INCLUDE_DIR}")
+            message(STATUS "  All libs: ${SHERPA_ONNX_LIBRARIES}")
+        else()
+            message(FATAL_ERROR "sherpa-onnx is required but not found. Please install sherpa-onnx first following the official guide:
+    git clone https://github.com/k2-fsa/sherpa-onnx
+    cd sherpa-onnx
+    mkdir build && cd build
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+    make -j6
+    sudo make install
+    
+Missing components:
+  Core lib: ${SHERPA_ONNX_CORE_LIB}
+  CXX API: ${SHERPA_ONNX_CXX_API_LIB}  
+  Include: ${SHERPA_ONNX_INCLUDE_DIR}")
+        endif()
     else()
-        message(STATUS "sherpa-onnx not found. Building without sherpa-onnx support.")
-        message(STATUS "Note: To enable speech recognition, please install sherpa-onnx:")
-        message(STATUS "  - Install via package manager, or")
-        message(STATUS "  - Build and install sherpa-onnx separately")
-        # Create empty variables for compilation
-        set(SHERPA_ONNX_LIBRARIES "")
-        set(SHERPA_ONNX_INCLUDE_DIRS "")
-        set(SHERPA_ONNX_FOUND FALSE)
+        message(STATUS "Found sherpa-onnx via pkg-config")
     endif()
 endif()
 
@@ -119,10 +138,14 @@ endif()
 
 # Include directories
 include_directories(
-    ${SHERPA_ONNX_INCLUDE_DIRS}
     ${WEBSOCKETPP_INCLUDE_DIR}
     ${JSONCPP_INCLUDE_DIRS}
 )
+
+# Add sherpa-onnx include directories if available
+if(SHERPA_ONNX_INCLUDE_DIRS)
+    include_directories(${SHERPA_ONNX_INCLUDE_DIRS})
+endif()
 
 if(USE_STANDALONE_ASIO)
     include_directories(${ASIO_INCLUDE_DIR})
