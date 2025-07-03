@@ -1,4 +1,5 @@
 # Multi-stage build Dockerfile for WebSocket ASR Server
+# Using optimized sherpa-onnx build for faster compilation
 FROM ubuntu:22.04 AS builder
 
 # 设置非交互式安装，避免构建时卡住
@@ -28,40 +29,24 @@ RUN apt-get update && apt-get install -y \
     liblzma-dev \
     libffi-dev \
     libsqlite3-dev \
-    # Python (sherpa-onnx 构建可能需要)
-    python3 \
-    python3-pip \
-    python3-dev \
     # 清理缓存
     && rm -rf /var/lib/apt/lists/*
 
 # 设置工作目录
 WORKDIR /workspace
 
-# 安装 sherpa-onnx (按照官方教程)
-RUN echo "Installing sherpa-onnx..." && \
-    git clone https://github.com/k2-fsa/sherpa-onnx.git && \
-    cd sherpa-onnx && \
-    mkdir build && \
-    cd build && \
-    # 使用 Release 模式构建，默认为静态库
-    cmake -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=/usr/local \
-          .. && \
-    # 使用所有可用核心进行编译
-    make -j$(nproc) && \
-    make install && \
-    # 更新动态链接库缓存
-    ldconfig && \
-    # 清理构建文件以减小镜像大小
-    cd /workspace && \
-    rm -rf sherpa-onnx
-
-# 复制项目源代码
+# 复制项目源代码和安装脚本
 COPY . /workspace/websocket_asr_server/
 
 # 设置项目工作目录
 WORKDIR /workspace/websocket_asr_server
+
+# 安装 sherpa-onnx 使用优化脚本 (大幅提升编译效率)
+RUN echo "Installing sherpa-onnx with optimized build..." && \
+    chmod +x install_sherpa_onnx_docker.sh && \
+    ./install_sherpa_onnx_docker.sh && \
+    # 更新动态链接库缓存
+    ldconfig
 
 # 构建项目
 RUN echo "Building WebSocket ASR Server..." && \
@@ -98,15 +83,18 @@ RUN apt-get update && apt-get install -y \
     # 清理缓存
     && rm -rf /var/lib/apt/lists/*
 
-# 从构建阶段复制已安装的 sherpa-onnx 库
-COPY --from=builder /usr/local/lib/libsherpa-onnx* /usr/local/lib/
+# 从构建阶段复制已安装的 sherpa-onnx 库 (仅复制必需的库)
+COPY --from=builder /usr/local/lib/libsherpa-onnx-core* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libsherpa-onnx-cxx-api* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libsherpa-onnx-c-api* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libsherpa-onnx-fst* /usr/local/lib/
+COPY --from=builder /usr/local/lib/libsherpa-onnx-kaldifst* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libonnxruntime* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libkaldi* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libssentencepiece* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libespeak* /usr/local/lib/
-COPY --from=builder /usr/local/lib/libpiper* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libkissfft* /usr/local/lib/
 COPY --from=builder /usr/local/lib/libucd* /usr/local/lib/
+# 不复制 TTS 相关库 (espeak, piper) 因为我们禁用了它们
 COPY --from=builder /usr/local/include/sherpa-onnx/ /usr/local/include/sherpa-onnx/
 
 # 从构建阶段复制编译好的可执行文件

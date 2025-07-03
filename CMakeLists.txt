@@ -12,8 +12,24 @@ find_package(Threads REQUIRED)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # Find sherpa-onnx (required - must be pre-installed)
+# Set up search paths - include user local directory
+set(SHERPA_ONNX_SEARCH_PATHS 
+    $ENV{HOME}/.local/lib 
+    /usr/local/lib 
+    /usr/lib
+)
+set(SHERPA_ONNX_INCLUDE_PATHS 
+    $ENV{HOME}/.local/include 
+    /usr/local/include 
+    /usr/include
+)
+
+message(STATUS "Searching for sherpa-onnx in paths:")
+message(STATUS "  Library paths: ${SHERPA_ONNX_SEARCH_PATHS}")
+message(STATUS "  Include paths: ${SHERPA_ONNX_INCLUDE_PATHS}")
+
 # First try to find via CMake config
-find_package(sherpa-onnx QUIET CONFIG)
+find_package(sherpa-onnx QUIET CONFIG PATHS $ENV{HOME}/.local /usr/local)
 
 if(sherpa-onnx_FOUND)
     message(STATUS "Found sherpa-onnx via CMake config: ${sherpa-onnx_DIR}")
@@ -27,28 +43,28 @@ else()
     if(NOT SHERPA_ONNX_FOUND)
         message(STATUS "sherpa-onnx not found via pkg-config")
         
-        # Try to find pre-installed libraries
-        find_library(SHERPA_ONNX_CORE_LIB sherpa-onnx-core PATHS /usr/local/lib /usr/lib)
-        find_library(SHERPA_ONNX_CXX_API_LIB sherpa-onnx-cxx-api PATHS /usr/local/lib /usr/lib)
-        find_library(SHERPA_ONNX_C_API_LIB sherpa-onnx-c-api PATHS /usr/local/lib /usr/lib)
-        find_library(SHERPA_ONNX_FST_LIB sherpa-onnx-fst PATHS /usr/local/lib /usr/lib)
-        find_library(SHERPA_ONNX_FSTFAR_LIB sherpa-onnx-fstfar PATHS /usr/local/lib /usr/lib)
-        find_library(SHERPA_ONNX_KALDIFST_LIB sherpa-onnx-kaldifst-core PATHS /usr/local/lib /usr/lib)
+        # Try to find pre-installed libraries in user and system directories
+        find_library(SHERPA_ONNX_CORE_LIB sherpa-onnx-core PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(SHERPA_ONNX_CXX_API_LIB sherpa-onnx-cxx-api PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(SHERPA_ONNX_C_API_LIB sherpa-onnx-c-api PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(SHERPA_ONNX_FST_LIB sherpa-onnx-fst PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(SHERPA_ONNX_FSTFAR_LIB sherpa-onnx-fstfar PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(SHERPA_ONNX_KALDIFST_LIB sherpa-onnx-kaldifst-core PATHS ${SHERPA_ONNX_SEARCH_PATHS})
         
         # Find additional required dependencies
-        find_library(ONNXRUNTIME_LIB onnxruntime PATHS /usr/local/lib /usr/lib)
-        find_library(KALDI_DECODER_LIB kaldi-decoder-core PATHS /usr/local/lib /usr/lib)
-        find_library(KALDI_NATIVE_FBANK_LIB kaldi-native-fbank-core PATHS /usr/local/lib /usr/lib)
-        find_library(SSENTENCEPIECE_LIB ssentencepiece_core PATHS /usr/local/lib /usr/lib)
-        find_library(ESPEAK_NG_LIB espeak-ng PATHS /usr/local/lib /usr/lib)
-        find_library(PIPER_PHONEMIZE_LIB piper_phonemize PATHS /usr/local/lib /usr/lib)
-        find_library(KISSFFT_LIB kissfft-float PATHS /usr/local/lib /usr/lib)
-        find_library(UCD_LIB ucd PATHS /usr/local/lib /usr/lib)
+        find_library(ONNXRUNTIME_LIB onnxruntime PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(KALDI_DECODER_LIB kaldi-decoder-core PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(KALDI_NATIVE_FBANK_LIB kaldi-native-fbank-core PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(SSENTENCEPIECE_LIB ssentencepiece_core PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(ESPEAK_NG_LIB espeak-ng PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(PIPER_PHONEMIZE_LIB piper_phonemize PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(KISSFFT_LIB kissfft-float PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(UCD_LIB ucd PATHS ${SHERPA_ONNX_SEARCH_PATHS})
         
         # Find include directory
         find_path(SHERPA_ONNX_INCLUDE_DIR
             NAMES sherpa-onnx/c-api/c-api.h
-            PATHS /usr/local/include /usr/include
+            PATHS ${SHERPA_ONNX_INCLUDE_PATHS}
             DOC "sherpa-onnx include directory"
         )
         
