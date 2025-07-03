@@ -1,0 +1,39 @@
+# 忽略构建产物
+build/
+*.o
+*.a
+*.so
+*.dylib
+
+# 忽略编译时的临时文件
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.ninja
+.ninja_deps
+.ninja_log
+compile_commands.json
+
+# 忽略日志文件
+*.log
+logs/
+
+# 忽略IDE文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 忽略系统文件
+.DS_Store
+Thumbs.db
+
+# 忽略大模型文件（在构建时下载）
+assets/*.tar.bz2
+assets/*.tar.gz
+assets/*.zip
+
+# 忽略Docker相关的临时文件
+.dockerignore
