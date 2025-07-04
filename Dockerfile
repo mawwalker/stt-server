@@ -35,11 +35,8 @@ RUN apt-get update && apt-get install -y \
 # 设置工作目录
 WORKDIR /workspace
 
-# 复制项目源代码和安装脚本
-COPY . /workspace/websocket_asr_server/
-
-# 设置项目工作目录
-WORKDIR /workspace/websocket_asr_server
+COPY install_sherpa_onnx_docker.sh /workspace/
+COPY sherpa_config.sh /workspace/
 
 # 安装 sherpa-onnx 使用优化脚本 (大幅提升编译效率)
 RUN echo "Installing sherpa-onnx with optimized build..." && \
@@ -47,6 +44,12 @@ RUN echo "Installing sherpa-onnx with optimized build..." && \
     ./install_sherpa_onnx_docker.sh && \
     # 更新动态链接库缓存
     ldconfig
+
+# 复制项目源代码和安装脚本
+COPY . /workspace/websocket_asr_server/
+
+# 设置项目工作目录
+WORKDIR /workspace/websocket_asr_server
 
 # 构建项目
 RUN echo "Building WebSocket ASR Server..." && \
@@ -132,9 +135,7 @@ ENV MAX_CONNECTIONS=100
 ENV CONNECTION_TIMEOUT_S=300
 
 # ASR配置默认值
-ENV ASR_POOL_SIZE=4
 ENV ASR_NUM_THREADS=4
-ENV ASR_ACQUIRE_TIMEOUT_MS=10000
 ENV ASR_MODEL_NAME=sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17
 ENV ASR_LANGUAGE=auto
 ENV ASR_USE_ITN=true
@@ -152,7 +153,6 @@ ENV VAD_DEBUG=false
 # VAD池配置默认值
 ENV VAD_POOL_MIN_SIZE=2
 ENV VAD_POOL_MAX_SIZE=10
-ENV VAD_POOL_ACQUIRE_TIMEOUT_MS=5000
 
 # 性能优化配置默认值
 ENV ENABLE_MEMORY_OPTIMIZATION=true

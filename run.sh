@@ -115,7 +115,6 @@ start_local() {
     echo "  Server Port: ${SERVER_PORT:-8000}"
     echo "  Models Root: ${MODELS_ROOT:-./assets}"
     echo "  Log Level: ${LOG_LEVEL:-INFO}"
-    echo "  ASR Pool Size: ${ASR_POOL_SIZE:-2}"
     echo ""
     
     # 启动服务

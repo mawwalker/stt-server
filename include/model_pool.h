@@ -13,49 +13,6 @@
 // 前向声明
 class ServerConfig;
 
-// ASR实例结构
-struct ASRInstance {
-    int id;
-    std::unique_ptr<sherpa_onnx::cxx::OfflineRecognizer> recognizer;
-    std::atomic<bool> in_use{false};
-    std::chrono::steady_clock::time_point last_used;
-};
-
-// ASR模型池管理器 - 管理多个ASR实例的复用
-class ASRModelPool {
-private:
-    std::vector<std::unique_ptr<ASRInstance>> asr_instances;
-    std::queue<int> available_instances;
-    mutable std::mutex pool_mutex;
-    std::condition_variable pool_cv;
-    std::string model_directory;
-    float sample_rate = 16000;
-    const int total_instances;
-    std::atomic<bool> initialized{false};
-    
-public:
-    explicit ASRModelPool(int pool_size = 2);
-    ~ASRModelPool();
-    
-    bool initialize(const std::string& model_dir, const ServerConfig& config);
-    
-    // 获取/释放识别器
-    int acquire_recognizer(int timeout_ms = 5000);
-    void release_recognizer(int instance_id);
-    sherpa_onnx::cxx::OfflineRecognizer& get_recognizer(int instance_id);
-    
-    // 状态查询
-    float get_sample_rate() const;
-    bool is_initialized() const;
-    
-    struct PoolStats {
-        size_t total_instances;
-        size_t available_instances;
-        size_t in_use_instances;
-    };
-    PoolStats get_pool_stats() const;
-};
-
 // VAD模型池管理器 - 管理VAD配置的共享和实例创建
 class VADModelPool {
 private:
@@ -185,20 +142,22 @@ public:
     void log_system_stats() const;
 };
 
-// 简化的模型管理器 - 管理ASR和VAD池的统一接口
+// 简化的模型管理器 - 仅用于向后兼容，建议使用 ModelPoolManager
 class ModelManager {
 private:
-    std::unique_ptr<ASRModelPool> asr_pool;
     std::unique_ptr<VADModelPool> vad_pool;
     std::atomic<bool> initialized{false};
     
+    // 向后兼容：保留共享ASR引擎的引用
+    std::unique_ptr<SharedASREngine> shared_asr;
+    
 public:
-    explicit ModelManager(int asr_pool_size = 2);
+    explicit ModelManager(int asr_pool_size = 2); // 参数保留但不使用
     ~ModelManager();
     
     bool initialize(const std::string& model_dir, const ServerConfig& config);
     
-    // ASR池接口
+    // ASR接口 - 重定向到共享引擎
     int acquire_asr_recognizer(int timeout_ms = 5000);
     void release_asr_recognizer(int instance_id);
     sherpa_onnx::cxx::OfflineRecognizer& get_asr_recognizer(int instance_id);
@@ -209,5 +168,12 @@ public:
     // 状态查询
     float get_sample_rate() const;
     bool is_initialized() const;
-    ASRModelPool::PoolStats get_asr_pool_stats() const;
+    
+    // 替代PoolStats的简化统计
+    struct LegacyStats {
+        size_t total_instances = 1;      // 共享ASR只有1个实例
+        size_t available_instances = 1;  // 总是可用
+        size_t in_use_instances = 0;     // 共享模式下无需跟踪
+    };
+    LegacyStats get_asr_pool_stats() const;
 };

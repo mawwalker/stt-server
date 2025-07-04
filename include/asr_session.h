@@ -59,7 +59,10 @@ public:
 
 private:
     void process_audio();
-    void perform_recognition(bool is_final);
-    void process_speech_segment(const sherpa_onnx::cxx::SpeechSegment& segment);
+    // Legacy methods - deprecated
+    // void perform_recognition(bool is_final);
+    // void process_speech_segment(const sherpa_onnx::cxx::SpeechSegment& segment);
+    void process_speech_segment_shared(const sherpa_onnx::cxx::SpeechSegment& segment);
+    void perform_recognition_shared(bool is_final);
     void send_result(const ASRResult& result);
 };

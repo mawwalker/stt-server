@@ -2,9 +2,7 @@ version: '3.8'
 
 services:
   websocket-asr-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: websocket-asr-server:latest
     container_name: websocket-asr-server
     ports:
       - "${SERVER_PORT:-8000}:${SERVER_PORT:-8000}"

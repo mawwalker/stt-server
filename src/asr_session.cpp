@@ -134,7 +134,7 @@ void ASRSession::process_audio() {
                 current_time - started_time).count() / 1000.0f;
             
             if (speech_started.load() && elapsed_seconds > 0.2) {
-                perform_recognition(false);
+                perform_recognition_shared(false);
                 started_time = std::chrono::steady_clock::now();
             }
             
@@ -143,7 +143,7 @@ void ASRSession::process_audio() {
                 auto segment = vad->Front();
                 vad->Pop();
                 
-                process_speech_segment(segment);
+                process_speech_segment_shared(segment);
                 
                 // Reset state after processing a complete segment
                 buffer.clear();
@@ -159,6 +159,8 @@ void ASRSession::process_audio() {
     LOG_INFO(client_id, "ASR session processing ended");
 }
 
+// Legacy method - deprecated, use perform_recognition_shared() instead
+/*
 void ASRSession::perform_recognition(bool is_final) {
     ModelManager* model_manager = engine->get_model_manager();
     if (!model_manager) {
@@ -210,7 +212,10 @@ void ASRSession::perform_recognition(bool is_final) {
     // 释放ASR实例
     model_manager->release_asr_recognizer(asr_instance_id);
 }
+*/
 
+// Legacy method - deprecated, use process_speech_segment_shared() instead
+/*
 void ASRSession::process_speech_segment(const SpeechSegment& segment) {
     ModelManager* model_manager = engine->get_model_manager();
     if (!model_manager) {
@@ -261,6 +266,89 @@ void ASRSession::process_speech_segment(const SpeechSegment& segment) {
     
     // 释放ASR实例
     model_manager->release_asr_recognizer(asr_instance_id);
+}
+*/
+
+// 优化版本：使用共享ASR引擎处理语音段
+void ASRSession::process_speech_segment_shared(const SpeechSegment& segment) {
+    SharedASREngine* shared_asr = engine->get_shared_asr();
+    if (!shared_asr || !shared_asr->is_initialized()) {
+        LOG_ERROR(client_id, "Shared ASR engine not available");
+        return;
+    }
+    
+    try {
+        std::string language, emotion, event;
+        std::vector<float> timestamps;
+        
+        // 使用共享ASR引擎进行识别，无需获取/释放实例
+        std::string text = shared_asr->recognize_with_metadata(
+            segment.samples.data(), segment.samples.size(),
+            language, emotion, event, timestamps);
+        
+        if (!text.empty()) {
+            int current_segment_id = segment_id.fetch_add(1);
+            processed_segments++;
+            
+            LOG_INFO(client_id, "Recognition result [" << current_segment_id << "]: " << text);
+            
+            ASRResult asr_result;
+            asr_result.text = text;
+            asr_result.finished = true;
+            asr_result.idx = current_segment_id;
+            asr_result.lang = language;
+            asr_result.emotion = emotion;
+            asr_result.event = event;
+            asr_result.timestamps = timestamps;
+            
+            send_result(asr_result);
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR(client_id, "Error processing speech segment with shared ASR: " << e.what());
+    }
+}
+
+// 优化版本：使用共享ASR引擎进行实时识别
+void ASRSession::perform_recognition_shared(bool is_final) {
+    SharedASREngine* shared_asr = engine->get_shared_asr();
+    if (!shared_asr || !shared_asr->is_initialized()) {
+        LOG_ERROR(client_id, "Shared ASR engine not available");
+        return;
+    }
+    
+    try {
+        std::string language, emotion, event;
+        std::vector<float> timestamps;
+        
+        // 使用共享ASR引擎进行识别，获取完整元数据
+        std::string text = shared_asr->recognize_with_metadata(
+            buffer.data(), buffer.size(),
+            language, emotion, event, timestamps);
+        
+        if (!text.empty()) {
+            ASRResult asr_result;
+            asr_result.text = text;
+            asr_result.finished = is_final;
+            asr_result.idx = segment_id.load();
+            asr_result.lang = language;
+            asr_result.emotion = emotion;
+            asr_result.event = event;
+            asr_result.timestamps = timestamps;
+            
+            send_result(asr_result);
+            
+            if (is_final) {
+                LOG_INFO(client_id, "Final result [" << segment_id.load() << "]: " << text);
+                segment_id++;
+            } else {
+                LOG_DEBUG(client_id, "Partial result [" << segment_id.load() << "]: " << text);
+            }
+        }
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR(client_id, "Error in shared recognition: " << e.what());
+    }
 }
 
 void ASRSession::send_result(const ASRResult& result) {
