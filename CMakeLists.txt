@@ -4,13 +4,34 @@ project(websocket_asr_server)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Security and compiler flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,-z,noexecstack")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-z,noexecstack")
+# Detect GCC version for conditional compilation flags
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} -dumpversion
+        OUTPUT_VARIABLE GCC_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    message(STATUS "Detected GCC version: ${GCC_VERSION}")
+endif()
 
-# Additional security flags
+# Security and compiler flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
+
+# Add GCC version-specific flags
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if(GCC_VERSION VERSION_GREATER_EQUAL "14.0")
+        # GCC 14+ specific flags for executable stack warnings
+        message(STATUS "Using GCC 14+ specific flags")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,-z,noexecstack")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-z,noexecstack")
+    else()
+        # For older GCC versions, use alternative approach
+        message(STATUS "Using flags compatible with GCC < 14")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wa,--noexecstack")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wa,--noexecstack")
+    endif()
+endif()
 
 # Find required packages
 find_package(PkgConfig REQUIRED)
@@ -194,11 +215,26 @@ target_link_libraries(websocket_asr_server
     Threads::Threads
 )
 
-# Add security-related linker flags
-target_link_options(websocket_asr_server PRIVATE
-    -Wl,-z,noexecstack
-    -Wl,--warn-execstack
-)
+# Add security-related linker flags based on GCC version
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if(GCC_VERSION VERSION_GREATER_EQUAL "14.0")
+        # GCC 14+ specific linker flags
+        target_link_options(websocket_asr_server PRIVATE
+            -Wl,-z,noexecstack
+            -Wl,--warn-execstack
+        )
+    else()
+        # For older GCC versions, use basic noexecstack flag
+        target_link_options(websocket_asr_server PRIVATE
+            -Wl,-z,noexecstack
+        )
+    endif()
+else()
+    # For non-GCC compilers (Clang, etc.)
+    target_link_options(websocket_asr_server PRIVATE
+        -Wl,-z,noexecstack
+    )
+endif()
 
 if(NOT USE_STANDALONE_ASIO)
     target_link_libraries(websocket_asr_server ${Boost_LIBRARIES})
