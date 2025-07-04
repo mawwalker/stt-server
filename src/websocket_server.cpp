@@ -1,12 +1,13 @@
 #include "websocket_server.h"
+#include "server_config.h"
 #include "logger.h"
 #include <iostream>
 #include <thread>
 #include <chrono>
 #include <vector>
 
-WebSocketASRServer::WebSocketASRServer(const std::string& models_path, int server_port) 
-    : model_dir(models_path), port(server_port) {
+WebSocketASRServer::WebSocketASRServer(const ServerConfig& config) 
+    : config_(std::make_unique<ServerConfig>(config)) {
     
     // Initialize WebSocket server
     // ws_server.set_access_channels(websocketpp::log::alevel::all);
@@ -35,7 +36,9 @@ WebSocketASRServer::WebSocketASRServer(const std::string& models_path, int serve
     
     ws_server.set_reuse_addr(true);
     
-    LOG_INFO("SERVER", "WebSocket ASR Server initialized with models: " << models_path << ", port: " << server_port);
+    const auto& server_settings = config_->get_server_settings();
+    LOG_INFO("SERVER", "WebSocket ASR Server initialized with models: " 
+             << server_settings.models_root << ", port: " << server_settings.port);
 }
 
 WebSocketASRServer::~WebSocketASRServer() {
@@ -44,7 +47,8 @@ WebSocketASRServer::~WebSocketASRServer() {
 
 bool WebSocketASRServer::initialize() {
     LOG_INFO("SERVER", "Initializing ASR engine...");
-    bool success = asr_engine.initialize(model_dir);
+    const auto& server_settings = config_->get_server_settings();
+    bool success = asr_engine.initialize(server_settings.models_root, *config_);
     if (success) {
         LOG_INFO("SERVER", "ASR engine initialized successfully");
         start_monitoring();
@@ -60,12 +64,14 @@ void WebSocketASRServer::run() {
         return;
     }
     
+    const auto& server_settings = config_->get_server_settings();
+    
     try {
-        ws_server.listen(port);
+        ws_server.listen(server_settings.port);
         ws_server.start_accept();
         
-        LOG_INFO("SERVER", "WebSocket ASR server listening on port " << port);
-        LOG_INFO("SERVER", "WebSocket endpoint: ws://localhost:" << port << "/asr");
+        LOG_INFO("SERVER", "WebSocket ASR server listening on port " << server_settings.port);
+        LOG_INFO("SERVER", "WebSocket endpoint: ws://localhost:" << server_settings.port << "/asr");
         
         ws_server.run();
     } catch (const std::exception& e) {

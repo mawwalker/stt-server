@@ -80,6 +80,8 @@ RUN apt-get update && apt-get install -y \
     liblzma5 \
     libffi8 \
     libsqlite3-0 \
+    # 网络工具 (用于健康检查)
+    net-tools \
     # 清理缓存
     && rm -rf /var/lib/apt/lists/*
 
@@ -122,15 +124,46 @@ USER asruser
 # 暴露端口
 EXPOSE 8000
 
-# 设置默认环境变量
+# 设置默认环境变量 (可被docker-compose或环境变量覆盖)
 ENV MODELS_ROOT=/app/assets
-ENV PORT=8000
-ENV THREADS=2
+ENV SERVER_PORT=8000
 ENV LOG_LEVEL=INFO
+ENV MAX_CONNECTIONS=100
+ENV CONNECTION_TIMEOUT_S=300
 
-# 健康检查
+# ASR配置默认值
+ENV ASR_POOL_SIZE=4
+ENV ASR_NUM_THREADS=4
+ENV ASR_ACQUIRE_TIMEOUT_MS=10000
+ENV ASR_MODEL_NAME=sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17
+ENV ASR_LANGUAGE=auto
+ENV ASR_USE_ITN=true
+ENV ASR_DEBUG=false
+
+# VAD配置默认值
+ENV VAD_THRESHOLD=0.5
+ENV VAD_MIN_SILENCE_DURATION=0.25
+ENV VAD_MIN_SPEECH_DURATION=0.25
+ENV VAD_MAX_SPEECH_DURATION=8.0
+ENV VAD_SAMPLE_RATE=16000
+ENV VAD_WINDOW_SIZE=100
+ENV VAD_DEBUG=false
+
+# VAD池配置默认值
+ENV VAD_POOL_MIN_SIZE=2
+ENV VAD_POOL_MAX_SIZE=10
+ENV VAD_POOL_ACQUIRE_TIMEOUT_MS=5000
+
+# 性能优化配置默认值
+ENV ENABLE_MEMORY_OPTIMIZATION=true
+ENV MAX_AUDIO_BUFFER_SIZE=1048576
+ENV GC_INTERVAL_S=60
+ENV ENABLE_PERFORMANCE_LOGGING=false
+
+# 健康检查 (使用简单的端口检查，因为程序可能没有 /health 端点)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:${PORT}/health || exit 1
+    CMD netstat -tuln | grep :${SERVER_PORT} || exit 1
 
-# 启动命令
-CMD ["sh", "-c", "websocket_asr_server --models-root ${MODELS_ROOT} --port ${PORT} --threads ${THREADS} --log-level ${LOG_LEVEL}"]
+# 直接使用二进制文件作为入口点，参考 run.sh 的本地启动逻辑
+ENTRYPOINT ["/usr/local/bin/websocket_asr_server"]
+CMD []

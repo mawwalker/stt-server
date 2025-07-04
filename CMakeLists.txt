@@ -206,6 +206,7 @@ add_executable(websocket_asr_server
     src/websocket_server.cpp
     src/logger.cpp
     src/model_pool.cpp
+    src/server_config.cpp
 )
 
 # Link libraries for websocket_asr_server

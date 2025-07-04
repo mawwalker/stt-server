@@ -12,6 +12,9 @@
 #include <atomic>
 #include <thread>
 
+// 前向声明
+class ServerConfig;
+
 typedef websocketpp::server<websocketpp::config::asio> server;
 typedef server::message_ptr message_ptr;
 typedef websocketpp::connection_hdl connection_hdl;
@@ -23,8 +26,7 @@ private:
     ConnectionManager connection_manager;
     std::unordered_map<std::string, std::unique_ptr<ASRSession>> sessions;
     std::mutex sessions_mutex;
-    std::string model_dir;
-    int port;
+    std::unique_ptr<ServerConfig> config_;
     std::atomic<size_t> total_connections{0};
     std::atomic<size_t> active_sessions{0};
     
@@ -33,7 +35,7 @@ private:
     std::atomic<bool> monitoring{false};
     
 public:
-    WebSocketASRServer(const std::string& models_path, int server_port);
+    WebSocketASRServer(const ServerConfig& config);
     ~WebSocketASRServer();
     
     bool initialize();

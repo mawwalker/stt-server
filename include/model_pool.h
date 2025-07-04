@@ -10,6 +10,9 @@
 #include <vector>
 #include <chrono>
 
+// 前向声明
+class ServerConfig;
+
 // ASR实例结构
 struct ASRInstance {
     int id;
@@ -34,7 +37,7 @@ public:
     explicit ASRModelPool(int pool_size = 2);
     ~ASRModelPool();
     
-    bool initialize(const std::string& model_dir, int num_threads = 2);
+    bool initialize(const std::string& model_dir, const ServerConfig& config);
     
     // 获取/释放识别器
     int acquire_recognizer(int timeout_ms = 5000);
@@ -60,13 +63,14 @@ private:
     sherpa_onnx::cxx::VadModelConfig vad_config;
     std::string model_directory;
     float sample_rate = 16000;
+    int window_size = 100;
     std::atomic<bool> initialized{false};
     
 public:
     VADModelPool();
     ~VADModelPool();
     
-    bool initialize(const std::string& model_dir);
+    bool initialize(const std::string& model_dir, const ServerConfig& config);
     
     // 为每个会话创建独立的VAD实例
     std::unique_ptr<sherpa_onnx::cxx::VoiceActivityDetector> create_vad_instance() const;
@@ -88,11 +92,12 @@ private:
     std::atomic<size_t> available_instances{0};
     const size_t max_instances;
     const size_t min_instances;
+    sherpa_onnx::cxx::VadModelConfig vad_config;
     
     std::unique_ptr<sherpa_onnx::cxx::VoiceActivityDetector> create_vad_instance();
     
 public:
-    VADPool(const std::string& model_dir, float sr, size_t min_pool_size = 2, size_t max_pool_size = 10);
+    VADPool(const std::string& model_dir, const ServerConfig& config);
     ~VADPool();
     
     // 获取VAD实例（如果池为空会创建新实例或等待）
@@ -124,7 +129,7 @@ public:
     SharedASREngine();
     ~SharedASREngine();
     
-    bool initialize(const std::string& model_dir, int num_threads = 2);
+    bool initialize(const std::string& model_dir, const ServerConfig& config);
     bool is_initialized() const { return initialized.load(); }
     float get_sample_rate() const { return sample_rate; }
     
@@ -152,8 +157,7 @@ public:
     ~ModelPoolManager();
     
     // 初始化所有模型
-    bool initialize(const std::string& model_dir, int num_threads = 2, 
-                   size_t min_vad_pool_size = 2, size_t max_vad_pool_size = 10);
+    bool initialize(const std::string& model_dir, const ServerConfig& config);
     
     // 获取共享ASR引擎
     SharedASREngine* get_asr_engine() { return asr_engine.get(); }
@@ -192,7 +196,7 @@ public:
     explicit ModelManager(int asr_pool_size = 2);
     ~ModelManager();
     
-    bool initialize(const std::string& model_dir, int num_threads = 2);
+    bool initialize(const std::string& model_dir, const ServerConfig& config);
     
     // ASR池接口
     int acquire_asr_recognizer(int timeout_ms = 5000);

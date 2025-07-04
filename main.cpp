@@ -1,20 +1,11 @@
 #include "websocket_server.h"
+#include "server_config.h"
 #include "logger.h"
 #include <iostream>
 #include <string>
 #include <signal.h>
 
 using namespace std;
-
-void print_usage(const char* program_name) {
-    cout << "Usage: " << program_name << " [options]" << endl;
-    cout << "Options:" << endl;
-    cout << "  --port PORT          Server port (default: 8000)" << endl;
-    cout << "  --models-root PATH   Path to models directory (default: ./assets)" << endl;
-    cout << "  --threads NUM        Number of threads (default: 2)" << endl;
-    cout << "  --log-level LEVEL    Log level: DEBUG, INFO, WARN, ERROR (default: INFO)" << endl;
-    cout << "  --help               Show this help message" << endl;
-}
 
 // Global server instance for signal handling
 WebSocketASRServer* g_server = nullptr;
@@ -28,33 +19,25 @@ void signal_handler(int sig) {
 }
 
 int main(int argc, char* argv[]) {
-    string models_root = "./assets";
-    int port = 8000;
-    int num_threads = 2;
-    string log_level = "INFO";
+    // 创建配置管理器
+    ServerConfig config;
     
-    // Parse command line arguments
-    for (int i = 1; i < argc; i++) {
-        string arg = argv[i];
-        if (arg == "--help") {
-            print_usage(argv[0]);
-            return 0;
-        } else if (arg == "--port" && i + 1 < argc) {
-            port = stoi(argv[++i]);
-        } else if (arg == "--models-root" && i + 1 < argc) {
-            models_root = argv[++i];
-        } else if (arg == "--threads" && i + 1 < argc) {
-            num_threads = stoi(argv[++i]);
-        } else if (arg == "--log-level" && i + 1 < argc) {
-            log_level = argv[++i];
-        } else {
-            cerr << "Unknown argument: " << arg << endl;
-            print_usage(argv[0]);
-            return 1;
-        }
+    // 首先从环境变量加载配置
+    config.load_from_environment();
+    
+    // 然后从命令行参数加载配置（会覆盖环境变量）
+    config.load_from_args(argc, argv);
+    
+    // 验证配置
+    if (!config.validate()) {
+        LOG_ERROR("MAIN", "Invalid configuration");
+        return 1;
     }
     
+    const auto& server_settings = config.get_server_settings();
+    
     // Set log level
+    const std::string& log_level = server_settings.log_level;
     if (log_level == "DEBUG") Logger::set_level(LogLevel::DEBUG);
     else if (log_level == "INFO") Logger::set_level(LogLevel::INFO);
     else if (log_level == "WARN") Logger::set_level(LogLevel::WARN);
@@ -65,13 +48,12 @@ int main(int argc, char* argv[]) {
     }
     
     LOG_INFO("SERVER", "Starting WebSocket ASR Server...");
-    LOG_INFO("SERVER", "Models directory: " << models_root);
-    LOG_INFO("SERVER", "Port: " << port);
-    LOG_INFO("SERVER", "Threads: " << num_threads);
-    LOG_INFO("SERVER", "Log level: " << log_level);
+    
+    // 打印当前配置
+    config.print_config();
     
     try {
-        WebSocketASRServer server(models_root, port);
+        WebSocketASRServer server(config);
         g_server = &server;
         
         // Setup signal handling

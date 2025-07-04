@@ -1,4 +1,5 @@
 #include "asr_engine.h"
+#include "server_config.h"
 #include "logger.h"
 #include <exception>
 
@@ -6,25 +7,24 @@ ASREngine::ASREngine() : initialized(false) {}
 
 ASREngine::~ASREngine() {}
 
-bool ASREngine::initialize(const std::string& model_dir, int num_threads) {
+bool ASREngine::initialize(const std::string& model_dir, const ServerConfig& config) {
     if (initialized.load()) {
         LOG_WARN("ENGINE", "ASR engine already initialized");
         return true;
     }
     
     try {
-        // 根据并发需求动态调整池大小
-        int pool_size = std::max(2, num_threads); // 至少2个实例
+        const auto& asr_config = config.get_asr_config();
         
-        model_manager = std::make_unique<ModelManager>(pool_size);
+        model_manager = std::make_unique<ModelManager>(asr_config.pool_size);
         
-        if (!model_manager->initialize(model_dir, num_threads)) {
+        if (!model_manager->initialize(model_dir, config)) {
             LOG_ERROR("ENGINE", "Failed to initialize model manager");
             return false;
         }
         
         initialized = true;
-        LOG_INFO("ENGINE", "ASR engine initialized with pool size: " << pool_size);
+        LOG_INFO("ENGINE", "ASR engine initialized with pool size: " << asr_config.pool_size);
         return true;
         
     } catch (const std::exception& e) {

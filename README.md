@@ -5,6 +5,7 @@
 ## 📋 目录导航
 
 - [功能特性](#功能特性)
+- [统一配置系统](#统一配置系统)
 - [快速开始](#快速开始)
 - [安装依赖](#安装依赖)
 - [模型准备](#模型准备)
@@ -25,22 +26,176 @@
 - **高并发** - 支持多客户端同时连接
 - **低延迟** - C++ 实现，性能优异
 - **容器化部署** - 完整的 Docker 解决方案
+- **🆕 统一配置** - 一个.env文件同时支持本地和Docker环境
+- **🆕 环境自适应** - 自动检测运行环境并适配配置
+
+## 🔧 统一配置系统
+
+### 一键启动
+
+```bash
+# 方式1: 使用统一启动脚本
+./run.sh local          # 本地启动
+./run.sh docker         # Docker启动
+./run.sh build          # 编译项目
+./run.sh status         # 查看状态
+
+# 方式2: 使用 Makefile
+make run                # 本地运行（默认）
+make run-docker         # Docker运行
+make build              # 编译
+make status             # 查看状态
+```
+
+### 配置文件统一
+
+只需要一个 `.env` 配置文件，支持本地和 Docker 环境：
+
+```bash
+# .env 文件 - 统一配置
+SERVER_PORT=8000
+LOG_LEVEL=INFO
+ASR_POOL_SIZE=2
+ASR_NUM_THREADS=2
+ASR_MODEL_NAME=sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17
+VAD_THRESHOLD=0.5
+ENABLE_MEMORY_OPTIMIZATION=true
+# ... 完整配置见 .env.example
+```
+
+### 环境自动检测
+
+系统会自动检测运行环境：
+- **本地环境**: 使用 `./assets` 作为模型目录
+- **Docker环境**: 自动使用 `/app/assets` 作为模型目录
+- **自动适配**: 无需手动修改配置文件
+- **Docker环境**: 自动使用 `/app/assets` 作为模型目录
+- **手动指定**: 设置 `RUN_ENVIRONMENT=local|docker`
+
+### 配置优先级
+
+**命令行参数** > **环境变量** > **默认值**
+
+```bash
+# 环境变量方式
+export ASR_POOL_SIZE=8
+./start.sh local
+
+# 命令行参数方式 (会覆盖环境变量)
+./build/websocket_asr_server --asr-pool-size 8
+```
+
+### 主要配置参数
+
+| 类型 | 参数 | 环境变量 | 默认值 | 说明 |
+|------|------|----------|--------|------|
+| 服务器 | `--port` | `SERVER_PORT` | 8000 | 服务端口 |
+| 服务器 | `--models-root` | `MODELS_ROOT` | ./assets | 模型目录 |
+| ASR | `--asr-pool-size` | `ASR_POOL_SIZE` | 2 | ASR模型池大小 |
+| ASR | `--asr-threads` | `ASR_NUM_THREADS` | 2 | ASR线程数 |
+| VAD | `--vad-pool-max` | `VAD_POOL_MAX_SIZE` | 10 | VAD池最大大小 |
+| VAD | `--vad-threshold` | `VAD_THRESHOLD` | 0.5 | VAD检测阈值 |
+
+📖 **完整配置文档**: [CONFIG.md](CONFIG.md)
 
 ## ⚡ 快速开始
 
-### 方法一：一键安装（最简单）
+### 1. 准备项目
+```bash
+# 克隆项目并进入目录
+git clone <your-repository-url>
+cd stt
+
+# 确保配置文件存在（已包含默认配置）
+ls .env  # 如果不存在，复制: cp .env.example .env
+```
+
+### 2. 一键启动
+
+**方式1: 统一启动脚本（推荐）**
+```bash
+# 给脚本执行权限
+chmod +x run.sh
+
+# 本地启动（自动编译）
+./run.sh local
+
+# Docker启动
+./run.sh docker
+
+# 查看帮助
+./run.sh help
+```
+
+**方式2: 使用 Makefile**
+```bash
+# 本地运行
+make run                # 等价于 ./run.sh local
+
+# Docker运行  
+make run-docker         # 等价于 ./run.sh docker
+
+# 查看所有命令
+make help
+```
+
+### 3. 验证服务
+```bash
+# 查看服务状态
+./run.sh status
+# 或
+make status
+
+# 服务应该在 http://localhost:8000 启动
+# WebSocket 端点: ws://localhost:8000/ws
+```
+
+### 4. 常用操作
+```bash
+./run.sh build          # 编译项目
+./run.sh logs           # 查看Docker日志
+./run.sh stop           # 停止Docker服务
+./run.sh clean          # 清理构建文件
+
+# 本地服务使用 Ctrl+C 停止
+```
 
 ```bash
-# 1. 克隆项目
-git clone <repository-url>
-cd websocket-asr-server
+# 本地启动
+mkdir -p build && cd build
+cmake .. && make -j$(nproc)
+cd ..
+source .env  # 加载配置
+./build/websocket_asr_server
 
-# 2. 一键安装所有依赖、编译sherpa-onnx、下载模型、编译项目
-chmod +x setup.sh
-./setup.sh
+# Docker启动
+docker-compose up --build -d
+```
 
-# 3. 运行服务
-./build/websocket_asr_server --models-root ./assets --port 8000 --threads 2
+### 方法三：自定义配置
+
+```bash
+# 编辑.env文件
+vim .env
+
+# 或者临时设置环境变量
+export ASR_POOL_SIZE=8
+export SERVER_PORT=8080
+export LOG_LEVEL=DEBUG
+
+# 启动
+./start.sh local
+```
+
+```bash
+# 完全自定义配置
+./build/websocket_asr_server \
+  --port 8080 \
+  --asr-pool-size 4 \
+  --asr-threads 8 \
+  --vad-pool-max 20 \
+  --log-level INFO \
+  --max-connections 100
 ```
 
 ### 方法二：Docker 部署（推荐生产环境）
@@ -50,12 +205,9 @@ chmod +x setup.sh
 git clone <repository-url>
 cd websocket-asr-server
 
-# 2. 构建并运行（一键完成）
-./docker_build.sh
-docker run -p 8000:8000 websocket-asr-server:latest
+# 2. build
 
-# 或使用 Docker Compose
-docker-compose up -d
+docker built -t stt-server .
 ```
 
 ### 方法三：分步安装

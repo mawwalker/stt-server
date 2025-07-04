@@ -1,4 +1,5 @@
 #include "model_pool.h"
+#include "server_config.h"
 #include "logger.h"
 #include <chrono>
 #include <exception>
@@ -17,7 +18,7 @@ ASRModelPool::~ASRModelPool() {
     }
 }
 
-bool ASRModelPool::initialize(const std::string& model_dir, int num_threads) {
+bool ASRModelPool::initialize(const std::string& model_dir, const ServerConfig& config) {
     std::lock_guard<std::mutex> lock(pool_mutex);
     
     if (initialized.load()) {
@@ -26,6 +27,7 @@ bool ASRModelPool::initialize(const std::string& model_dir, int num_threads) {
     }
     
     model_directory = model_dir;
+    const auto& asr_config = config.get_asr_config();
     
     try {
         // 创建多个ASR实例
@@ -34,22 +36,22 @@ bool ASRModelPool::initialize(const std::string& model_dir, int num_threads) {
             instance->id = i;
             
             // 配置ASR
-            OfflineRecognizerConfig config;
-            config.model_config.sense_voice.model = 
-                model_dir + "/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.onnx";
-            config.model_config.sense_voice.use_itn = true;
-            config.model_config.sense_voice.language = "auto";
-            config.model_config.tokens = 
-                model_dir + "/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt";
+            OfflineRecognizerConfig recognizer_config;
+            recognizer_config.model_config.sense_voice.model = 
+                model_dir + "/" + asr_config.model_name + "/model.onnx";
+            recognizer_config.model_config.sense_voice.use_itn = asr_config.use_itn;
+            recognizer_config.model_config.sense_voice.language = asr_config.language;
+            recognizer_config.model_config.tokens = 
+                model_dir + "/" + asr_config.model_name + "/tokens.txt";
             
             // 每个实例使用较少的线程数，避免过度竞争
-            config.model_config.num_threads = std::max(1, num_threads / total_instances);
-            config.model_config.debug = false;
+            recognizer_config.model_config.num_threads = std::max(1, asr_config.num_threads / total_instances);
+            recognizer_config.model_config.debug = asr_config.debug;
             
             LOG_INFO("ASR_POOL", "Creating ASR instance " << i << " with " 
-                     << config.model_config.num_threads << " threads");
+                     << recognizer_config.model_config.num_threads << " threads");
             
-            auto recognizer_obj = OfflineRecognizer::Create(config);
+            auto recognizer_obj = OfflineRecognizer::Create(recognizer_config);
             if (!recognizer_obj.Get()) {
                 LOG_ERROR("ASR_POOL", "Failed to create ASR instance " << i);
                 return false;
@@ -155,7 +157,7 @@ VADModelPool::VADModelPool() {}
 
 VADModelPool::~VADModelPool() {}
 
-bool VADModelPool::initialize(const std::string& model_dir) {
+bool VADModelPool::initialize(const std::string& model_dir, const ServerConfig& config) {
     std::lock_guard<std::mutex> lock(config_mutex);
     
     if (initialized.load()) {
@@ -164,19 +166,21 @@ bool VADModelPool::initialize(const std::string& model_dir) {
     }
     
     model_directory = model_dir;
+    const auto& vad_config_params = config.get_vad_config();
+    window_size = vad_config_params.window_size;
     
     try {
         // 配置共享的VAD配置
         vad_config.silero_vad.model = model_dir + "/silero_vad/silero_vad.onnx";
-        vad_config.silero_vad.threshold = 0.5;
-        vad_config.silero_vad.min_silence_duration = 0.25;
-        vad_config.silero_vad.min_speech_duration = 0.25;
-        vad_config.silero_vad.max_speech_duration = 8;
-        vad_config.sample_rate = sample_rate;
-        vad_config.debug = false;
+        vad_config.silero_vad.threshold = vad_config_params.threshold;
+        vad_config.silero_vad.min_silence_duration = vad_config_params.min_silence_duration;
+        vad_config.silero_vad.min_speech_duration = vad_config_params.min_speech_duration;
+        vad_config.silero_vad.max_speech_duration = vad_config_params.max_speech_duration;
+        vad_config.sample_rate = vad_config_params.sample_rate;
+        vad_config.debug = vad_config_params.debug;
         
         // 测试VAD配置是否有效
-        auto test_vad = VoiceActivityDetector::Create(vad_config, 100);
+        auto test_vad = VoiceActivityDetector::Create(vad_config, window_size);
         if (!test_vad.Get()) {
             LOG_ERROR("VAD_POOL", "Failed to validate VAD configuration");
             return false;
@@ -202,7 +206,7 @@ std::unique_ptr<VoiceActivityDetector> VADModelPool::create_vad_instance() const
     
     try {
         // 为每个会话创建独立的VAD实例，但共享模型文件
-        auto vad_obj = VoiceActivityDetector::Create(vad_config, 100);
+        auto vad_obj = VoiceActivityDetector::Create(vad_config, window_size);
         if (!vad_obj.Get()) {
             LOG_ERROR("VAD_POOL", "Failed to create VAD instance");
             return nullptr;
@@ -232,19 +236,19 @@ ModelManager::ModelManager(int asr_pool_size) {
 
 ModelManager::~ModelManager() {}
 
-bool ModelManager::initialize(const std::string& model_dir, int num_threads) {
-    auto stats = asr_pool->get_pool_stats();
+bool ModelManager::initialize(const std::string& model_dir, const ServerConfig& config) {
+    auto asr_stats = asr_pool->get_pool_stats();
     LOG_INFO("MODEL_MANAGER", "Initializing model manager with " 
-             << stats.total_instances << " ASR instances");
+             << asr_stats.total_instances << " ASR instances");
     
     // 初始化ASR池
-    if (!asr_pool->initialize(model_dir, num_threads)) {
+    if (!asr_pool->initialize(model_dir, config)) {
         LOG_ERROR("MODEL_MANAGER", "Failed to initialize ASR pool");
         return false;
     }
     
     // 初始化VAD池
-    if (!vad_pool->initialize(model_dir)) {
+    if (!vad_pool->initialize(model_dir, config)) {
         LOG_ERROR("MODEL_MANAGER", "Failed to initialize VAD pool");
         return false;
     }

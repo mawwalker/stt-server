@@ -7,35 +7,53 @@ services:
       dockerfile: Dockerfile
     container_name: websocket-asr-server
     ports:
-      - "8000:8000"
+      - "${SERVER_PORT:-8000}:${SERVER_PORT:-8000}"
+    env_file:
+      - ${ENV_FILE:-.env}
     environment:
+      # 确保Docker环境下的路径设置
       - MODELS_ROOT=/app/assets
-      - PORT=8000
-      - THREADS=2
-      - LOG_LEVEL=INFO
+      - RUN_ENVIRONMENT=docker
     volumes:
-      # 如果您想要挂载本地模型文件，可以取消注释下面的行
-      # - ./assets:/app/assets:ro
-      # 如果您想要持久化日志，可以取消注释下面的行
-      # - ./logs:/app/logs
+      # 挂载本地模型文件 (推荐用于生产环境)
+      - ./assets:/app/assets:ro
+      # 持久化日志 (可选) - 取消注释以启用
+      - ./logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "sh", "-c", "netstat -tuln | grep :${SERVER_PORT:-8000} || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 60s  # 增加启动时间，因为模型加载需要时间
     restart: unless-stopped
-    # 资源限制 (可选)
+    # 资源限制 (根据配置动态调整)
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 4G
+          cpus: '${DOCKER_CPU_LIMIT:-4.0}'
+          memory: ${DOCKER_MEMORY_LIMIT:-8G}
         reservations:
-          cpus: '1.0'
-          memory: 2G
+          cpus: '${DOCKER_CPU_RESERVATION:-2.0}'
+          memory: ${DOCKER_MEMORY_RESERVATION:-4G}
+    # 标签用于管理
+    labels:
+      - "com.example.service=websocket-asr-server"
+      - "com.example.environment=${DOCKER_ENV:-development}"
 
-  # 可选：添加一个 nginx 反向代理
+  # 可选：Redis缓存服务 (用于会话管理或结果缓存)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: asr-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   restart: unless-stopped
+  #   networks:
+  #     - asr-network
+  #   command: redis-server --appendonly yes
+
+  # 可选：Nginx反向代理和负载均衡
   # nginx:
   #   image: nginx:alpine
   #   container_name: asr-nginx
@@ -44,10 +62,31 @@ services:
   #     - "443:443"
   #   volumes:
   #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./ssl:/etc/nginx/ssl:ro  # SSL证书目录
   #   depends_on:
   #     - websocket-asr-server
   #   restart: unless-stopped
+  #   networks:
+  #     - asr-network
 
-networks:
-  default:
-    name: asr-network
+  # 可选：监控服务 (Prometheus + Grafana)
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: asr-prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  #     - prometheus_data:/prometheus
+  #   restart: unless-stopped
+  #   networks:
+  #     - asr-network
+
+# 数据卷定义
+volumes:
+  # redis_data:
+  # prometheus_data:
+  # grafana_data:
+  logs_data:  # 日志持久化卷
+
+# 网络定义

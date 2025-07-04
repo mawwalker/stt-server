@@ -6,6 +6,9 @@
 #include <memory>
 #include <atomic>
 
+// 前向声明
+class ServerConfig;
+
 // 保持接口兼容性的包装器类
 class ASREngine {
 private:
@@ -16,7 +19,7 @@ public:
     ASREngine();
     ~ASREngine();
     
-    bool initialize(const std::string& model_dir, int num_threads = 2);
+    bool initialize(const std::string& model_dir, const ServerConfig& config);
     
     bool is_initialized() const;
     float get_sample_rate() const;
