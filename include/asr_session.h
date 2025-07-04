@@ -38,6 +38,9 @@ private:
     std::chrono::steady_clock::time_point started_time;
     static const int window_size = 512;
     
+    // ASR实例管理
+    std::atomic<int> acquired_asr_instance{-1};
+    
     // Performance metrics
     std::atomic<size_t> processed_samples{0};
     std::atomic<size_t> processed_segments{0};

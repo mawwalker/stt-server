@@ -4,6 +4,14 @@ project(websocket_asr_server)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Security and compiler flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,-z,noexecstack")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wl,-z,noexecstack")
+
+# Additional security flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra")
+
 # Find required packages
 find_package(PkgConfig REQUIRED)
 find_package(Threads REQUIRED)
@@ -176,6 +184,7 @@ add_executable(websocket_asr_server
     src/asr_session.cpp
     src/websocket_server.cpp
     src/logger.cpp
+    src/model_pool.cpp
 )
 
 # Link libraries for websocket_asr_server
@@ -183,6 +192,12 @@ target_link_libraries(websocket_asr_server
     ${SHERPA_ONNX_LIBRARIES}
     ${JSONCPP_LIBRARIES}
     Threads::Threads
+)
+
+# Add security-related linker flags
+target_link_options(websocket_asr_server PRIVATE
+    -Wl,-z,noexecstack
+    -Wl,--warn-execstack
 )
 
 if(NOT USE_STANDALONE_ASIO)

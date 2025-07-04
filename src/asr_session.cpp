@@ -108,7 +108,7 @@ void ASRSession::process_audio() {
             
             // Process VAD in windows
             int current_offset = offset.load();
-            while (current_offset + window_size < buffer.size()) {
+            while (current_offset + window_size < static_cast<int>(buffer.size())) {
                 vad->AcceptWaveform(buffer.data() + current_offset, window_size);
                 if (!speech_started.load() && vad->IsDetected()) {
                     speech_started = true;
@@ -160,12 +160,27 @@ void ASRSession::process_audio() {
 }
 
 void ASRSession::perform_recognition(bool is_final) {
+    ModelManager* model_manager = engine->get_model_manager();
+    if (!model_manager) {
+        LOG_ERROR(client_id, "Model manager not available");
+        return;
+    }
+    
+    // 获取ASR实例
+    int asr_instance_id = model_manager->acquire_asr_recognizer(3000); // 3秒超时
+    if (asr_instance_id < 0) {
+        LOG_WARN(client_id, "Failed to acquire ASR recognizer, skipping recognition");
+        return;
+    }
+    
     try {
-        OfflineStream stream = engine->get_recognizer().CreateStream();
-        stream.AcceptWaveform(engine->get_sample_rate(), buffer.data(), buffer.size());
-        engine->get_recognizer().Decode(&stream);
+        auto& recognizer = model_manager->get_asr_recognizer(asr_instance_id);
         
-        OfflineRecognizerResult result = engine->get_recognizer().GetResult(&stream);
+        OfflineStream stream = recognizer.CreateStream();
+        stream.AcceptWaveform(engine->get_sample_rate(), buffer.data(), buffer.size());
+        recognizer.Decode(&stream);
+        
+        OfflineRecognizerResult result = recognizer.GetResult(&stream);
         std::string text = result.text;
         
         if (!text.empty()) {
@@ -187,19 +202,38 @@ void ASRSession::perform_recognition(bool is_final) {
                 LOG_DEBUG(client_id, "Partial result [" << segment_id.load() << "]: " << text);
             }
         }
+        
     } catch (const std::exception& e) {
         LOG_ERROR(client_id, "Error in recognition: " << e.what());
     }
+    
+    // 释放ASR实例
+    model_manager->release_asr_recognizer(asr_instance_id);
 }
 
 void ASRSession::process_speech_segment(const SpeechSegment& segment) {
+    ModelManager* model_manager = engine->get_model_manager();
+    if (!model_manager) {
+        LOG_ERROR(client_id, "Model manager not available");
+        return;
+    }
+    
+    // 获取ASR实例
+    int asr_instance_id = model_manager->acquire_asr_recognizer(3000); // 3秒超时
+    if (asr_instance_id < 0) {
+        LOG_WARN(client_id, "Failed to acquire ASR recognizer for speech segment");
+        return;
+    }
+    
     try {
-        OfflineStream stream = engine->get_recognizer().CreateStream();
+        auto& recognizer = model_manager->get_asr_recognizer(asr_instance_id);
+        
+        OfflineStream stream = recognizer.CreateStream();
         stream.AcceptWaveform(engine->get_sample_rate(), 
                             segment.samples.data(), segment.samples.size());
-        engine->get_recognizer().Decode(&stream);
+        recognizer.Decode(&stream);
         
-        OfflineRecognizerResult result = engine->get_recognizer().GetResult(&stream);
+        OfflineRecognizerResult result = recognizer.GetResult(&stream);
         std::string text = result.text;
         
         if (!text.empty()) {
@@ -220,9 +254,13 @@ void ASRSession::process_speech_segment(const SpeechSegment& segment) {
             
             send_result(asr_result);
         }
+        
     } catch (const std::exception& e) {
         LOG_ERROR(client_id, "Error processing speech segment: " << e.what());
     }
+    
+    // 释放ASR实例
+    model_manager->release_asr_recognizer(asr_instance_id);
 }
 
 void ASRSession::send_result(const ASRResult& result) {

@@ -2,53 +2,31 @@
 #include "logger.h"
 #include <exception>
 
-using namespace sherpa_onnx::cxx;
+ASREngine::ASREngine() : initialized(false) {}
 
-ASREngine::ASREngine() : sample_rate(16000), initialized(false) {}
+ASREngine::~ASREngine() {}
 
 bool ASREngine::initialize(const std::string& model_dir, int num_threads) {
-    std::lock_guard<std::mutex> lock(engine_mutex);
-    model_directory = model_dir;  // Store model directory
+    if (initialized.load()) {
+        LOG_WARN("ENGINE", "ASR engine already initialized");
+        return true;
+    }
+    
     try {
-        // Initialize VAD template
-        VadModelConfig vad_config;
-        vad_config.silero_vad.model = model_dir + "/silero_vad/silero_vad.onnx";
-        vad_config.silero_vad.threshold = 0.5;
-        vad_config.silero_vad.min_silence_duration = 0.25;
-        vad_config.silero_vad.min_speech_duration = 0.25;
-        vad_config.silero_vad.max_speech_duration = 8;
-        vad_config.sample_rate = sample_rate;
-        vad_config.debug = false;
+        // 根据并发需求动态调整池大小
+        int pool_size = std::max(2, num_threads); // 至少2个实例
         
-        auto vad_obj = VoiceActivityDetector::Create(vad_config, 100);
-        if (!vad_obj.Get()) {
-            LOG_ERROR("ENGINE", "Failed to create VAD template");
+        model_manager = std::make_unique<ModelManager>(pool_size);
+        
+        if (!model_manager->initialize(model_dir, num_threads)) {
+            LOG_ERROR("ENGINE", "Failed to initialize model manager");
             return false;
         }
-        vad_template = std::make_unique<VoiceActivityDetector>(std::move(vad_obj));
-        
-        // Initialize ASR
-        OfflineRecognizerConfig config;
-        config.model_config.sense_voice.model = 
-            model_dir + "/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/model.onnx";
-        config.model_config.sense_voice.use_itn = true;
-        config.model_config.sense_voice.language = "auto";
-        config.model_config.tokens = 
-            model_dir + "/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/tokens.txt";
-        config.model_config.num_threads = num_threads;
-        config.model_config.debug = false;
-        
-        LOG_INFO("ENGINE", "Loading ASR model...");
-        auto recognizer_obj = OfflineRecognizer::Create(config);
-        if (!recognizer_obj.Get()) {
-            LOG_ERROR("ENGINE", "Failed to create recognizer");
-            return false;
-        }
-        recognizer = std::make_unique<OfflineRecognizer>(std::move(recognizer_obj));
-        LOG_INFO("ENGINE", "ASR model loaded successfully");
         
         initialized = true;
+        LOG_INFO("ENGINE", "ASR engine initialized with pool size: " << pool_size);
         return true;
+        
     } catch (const std::exception& e) {
         LOG_ERROR("ENGINE", "Error initializing ASR engine: " << e.what());
         return false;
@@ -60,30 +38,21 @@ bool ASREngine::is_initialized() const {
 }
 
 float ASREngine::get_sample_rate() const { 
-    return sample_rate; 
+    if (!initialized.load() || !model_manager) {
+        return 16000; // 默认值
+    }
+    return model_manager->get_sample_rate();
 }
 
-std::unique_ptr<VoiceActivityDetector> ASREngine::create_vad() const {
-    std::lock_guard<std::mutex> lock(engine_mutex);
-    if (!vad_template || model_directory.empty()) return nullptr;
+std::unique_ptr<sherpa_onnx::cxx::VoiceActivityDetector> ASREngine::create_vad() const {
+    if (!initialized.load() || !model_manager) {
+        LOG_ERROR("ENGINE", "ASR engine not initialized");
+        return nullptr;
+    }
     
-    VadModelConfig vad_config;
-    vad_config.silero_vad.model = model_directory + "/silero_vad/silero_vad.onnx";  // Set model path
-    vad_config.silero_vad.threshold = 0.5;
-    vad_config.silero_vad.min_silence_duration = 0.25;
-    vad_config.silero_vad.min_speech_duration = 0.25;
-    vad_config.silero_vad.max_speech_duration = 8;
-    vad_config.sample_rate = sample_rate;
-    vad_config.debug = false;
-    
-    // Create new VAD instance with proper model path
-    auto vad_obj = VoiceActivityDetector::Create(vad_config, 100);
-    if (!vad_obj.Get()) return nullptr;
-    
-    return std::make_unique<VoiceActivityDetector>(std::move(vad_obj));
+    return model_manager->create_vad_instance();
 }
 
-OfflineRecognizer& ASREngine::get_recognizer() { 
-    std::lock_guard<std::mutex> lock(engine_mutex);
-    return *recognizer; 
+ModelManager* ASREngine::get_model_manager() const {
+    return model_manager.get();
 }

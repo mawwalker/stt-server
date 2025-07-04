@@ -116,9 +116,21 @@ void WebSocketASRServer::monitor_performance() {
         size_t connections = connection_manager.get_connection_count();
         size_t sessions_count = active_sessions.load();
         
+        // 获取ASR池状态
+        auto pool_stats = asr_engine.get_model_manager()->get_asr_pool_stats();
+        
         LOG_INFO("SERVER", "Performance stats - Total connections: " << total_connections.load() 
                  << ", Active connections: " << connections 
-                 << ", Active sessions: " << sessions_count);
+                 << ", Active sessions: " << sessions_count
+                 << ", ASR pool (total/available/in_use): " 
+                 << pool_stats.total_instances << "/" 
+                 << pool_stats.available_instances << "/" 
+                 << pool_stats.in_use_instances);
+        
+        // 如果池使用率过高，发出警告
+        if (pool_stats.available_instances == 0 && pool_stats.total_instances > 0) {
+            LOG_WARN("SERVER", "ASR pool fully utilized - consider increasing pool size");
+        }
         
         // Log individual session stats
         std::vector<std::string> client_ids = connection_manager.get_all_client_ids();
