@@ -387,67 +387,7 @@ docker build -t websocket-asr-server .
 docker run -p 8000:8000 websocket-asr-server:latest
 
 # 方法三：使用 Docker Compose（推荐）
-docker-compose up -d
-```
-
-### Docker 优化特性
-
-本项目的 Docker 构建已针对 sherpa-onnx 进行了深度优化：
-
-| 优化项目 | 完整构建 | 优化构建 | 提升效果 |
-|----------|----------|----------|----------|
-| 构建时间 | 45-60分钟 | 15-20分钟 | **60-70%** |
-| 镜像大小 | ~2.5GB | ~1.2GB | **50%** |
-| 内存使用 | ~8GB | ~4GB | **50%** |
-
-**优化原理**: 
-- ✅ 保留 ASR识别、VAD检测、C++ API
-- ❌ 移除 TTS、说话人分离、Python绑定、GPU支持等
-
-### Docker Compose 配置
-
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  websocket-asr-server:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - LOG_LEVEL=INFO
-      - THREADS=4
-    volumes:
-      - ./assets:/app/assets:ro  # 模型文件（只读）
-      - ./logs:/app/logs         # 日志持久化
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-```
-
-### 生产环境部署
-
-#### 使用 Nginx 反向代理
-
-```bash
-# 启动带 Nginx 的完整服务
-docker-compose --profile with-proxy up -d
-```
-
-#### 资源配置
-
-```yaml
-deploy:
-  resources:
-    limits:
-      memory: 4G      # 根据模型大小调整
-      cpus: "4.0"     # 根据 CPU 核心数调整
-    reservations:
-      memory: 2G
-      cpus: "2.0"
+docker compose up -d
 ```
 
 ### Docker 健康检查
@@ -480,10 +420,12 @@ docker logs -f websocket-asr-server
 
 ```json
 {
-    "text": "识别的文本内容",
+    "text": "Hello world",
     "finished": false,     // true=最终结果，false=部分结果
     "idx": 0,              // 语音段索引
-    "timestamp": 1234567890 // 时间戳（可选）
+    "lang": "zh",           // 语言
+    "timestamp": [0.1, 0.2], // 时间戳（可选）
+    "tokens": ["Hello", "world"]
 }
 ```
 
@@ -573,16 +515,6 @@ sysctl -p
 ulimit -n 65536
 ```
 
-### 性能基准
-
-在典型硬件配置下的性能参考：
-
-| 硬件配置 | 并发连接 | 延迟 | 吞吐量 |
-|----------|----------|------|--------|
-| 4核 8GB | 10 | <200ms | 20 sessions/s |
-| 8核 16GB | 50 | <150ms | 100 sessions/s |
-| 16核 32GB | 100 | <100ms | 200 sessions/s |
-
 ## 🔧 故障排除
 
 ### 编译问题
@@ -590,13 +522,7 @@ ulimit -n 65536
 #### 问题1：找不到 sherpa-onnx
 
 ```bash
-# 解决方案1：设置环境变量
-export PKG_CONFIG_PATH="$HOME/.local/lib/pkgconfig:/usr/local/lib/pkgconfig:$PKG_CONFIG_PATH"
-export LD_LIBRARY_PATH="$HOME/.local/lib:/usr/local/lib:$LD_LIBRARY_PATH"
-sudo ldconfig
-
-# 解决方案2：使用安装脚本
-source ./setup_env.sh
+./install_sherpa_onnx.sh
 ```
 
 #### 问题2：缺少依赖库
@@ -607,17 +533,7 @@ sudo apt-get update
 sudo apt-get install -y libwebsocketpp-dev libjsoncpp-dev libasio-dev
 
 # CentOS/RHEL
-sudo yum install -y jsoncpp-devel boost-devel
-```
-
-#### 问题3：GCC 版本兼容
-
-```bash
-# 检查 GCC 版本
-gcc --version
-
-# 如果 GCC <= 10，使用共享库编译
-./install_sherpa_onnx.sh --shared
+没试过
 ```
 
 ### 运行时问题
@@ -629,9 +545,7 @@ gcc --version
 ls -la assets/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/
 ls -la assets/silero_vad/
 
-# 重新下载模型
-rm -rf assets/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17
-./download_models.sh
+# 如果不存在，参考sherpa-onnx，下载需要的两个模型
 ```
 
 #### 问题2：端口被占用
@@ -676,15 +590,6 @@ docker logs --details websocket-asr-server
 
 # 进入容器调试
 docker exec -it websocket-asr-server /bin/bash
-```
-
-#### 问题3：模型下载失败
-
-```bash
-# 手动下载到本地后挂载
-mkdir -p ./assets
-# ... 下载模型文件 ...
-docker run -v ./assets:/app/assets websocket-asr-server
 ```
 
 ### 常见错误及解决
@@ -757,28 +662,6 @@ docker run -v ./assets:/app/assets websocket-asr-server
 8. 通过 WebSocket 发送 JSON 结果
 ```
 
-### 线程模型
-
-```
-Main Thread
-├── WebSocket Listener Thread
-├── Connection Manager Thread  
-└── Worker Threads Pool
-    ├── ASR Thread 1
-    ├── ASR Thread 2
-    └── ASR Thread N
-```
-
-### 与 Python 版本的差异
-
-| 特性 | C++ 版本 | Python 版本 |
-|------|----------|-------------|
-| **性能** | 更低延迟、更高吞吐量 | 相对较慢 |
-| **内存** | 更高效的内存使用 | GIL限制 |
-| **并发** | 原生多线程支持 | 受GIL限制 |
-| **部署** | 单一可执行文件 | 需要Python环境 |
-| **维护** | 编译型，稳定性高 | 解释型，更易调试 |
-
 ## 👨‍💻 开发指南
 
 ### 项目结构
@@ -812,14 +695,12 @@ Main Thread
 
 ### 开发环境设置
 
-# 2. 设置开发环境
-make dev-setup  # 如果有 Makefile
-
 # 或者手动设置
 ./install_sherpa_onnx.sh
 source ./setup_env.sh
 
 # 3. 编译调试版本
+```
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Debug
 make -j$(nproc)
@@ -955,7 +836,6 @@ Closes #123
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) - 优秀的语音识别框架
 - [SenseVoice](https://github.com/FunAudioLLM/SenseVoice) - 多语言语音识别模型  
 - [WebSocket++](https://github.com/zaphoyd/websocketpp) - C++ WebSocket 库
-- [nlohmann/json](https://github.com/nlohmann/json) - 现代 C++ JSON 库
 
 ---
 
