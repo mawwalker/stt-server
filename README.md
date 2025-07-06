@@ -20,6 +20,7 @@
 ## 🚀 功能特性
 
 - **实时流式语音识别** - 基于 SenseVoice 模型的多语言识别
+- **🆕 一句话识别** - 完整音频录制后进行一次性识别，适用于离线处理
 - **WebSocket 接口** - 兼容现有的 Python 客户端
 - **多语言支持** - 中文、英文、日文、韩文、粤语
 - **内置 VAD** - Silero VAD 语音活动检测
@@ -82,7 +83,7 @@ export ASR_POOL_SIZE=8
 ./start.sh local
 
 # 命令行参数方式 (会覆盖环境变量)
-./build/websocket_asr_server --asr-pool-size 8
+./build/websocket_asr_server
 ```
 
 ### 主要配置参数
@@ -91,7 +92,6 @@ export ASR_POOL_SIZE=8
 |------|------|----------|--------|------|
 | 服务器 | `--port` | `SERVER_PORT` | 8000 | 服务端口 |
 | 服务器 | `--models-root` | `MODELS_ROOT` | ./assets | 模型目录 |
-| ASR | `--asr-pool-size` | `ASR_POOL_SIZE` | 2 | ASR模型池大小 |
 | ASR | `--asr-threads` | `ASR_NUM_THREADS` | 2 | ASR线程数 |
 | VAD | `--vad-pool-max` | `VAD_POOL_MAX_SIZE` | 10 | VAD池最大大小 |
 | VAD | `--vad-threshold` | `VAD_THRESHOLD` | 0.5 | VAD检测阈值 |
@@ -191,7 +191,6 @@ export LOG_LEVEL=DEBUG
 # 完全自定义配置
 ./build/websocket_asr_server \
   --port 8080 \
-  --asr-pool-size 4 \
   --asr-threads 8 \
   --vad-pool-max 20 \
   --log-level INFO \
@@ -405,12 +404,25 @@ docker logs -f websocket-asr-server
 
 ## 🌐 WebSocket接口
 
+### 接口端点
+
+**流式识别**: `ws://localhost:8000/sttRealtime?samplerate=16000`
+- 实时流式语音识别，边说边识别
+- 适用于实时对话、语音助手等场景
+
+**一句话识别**: `ws://localhost:8000/oneshot`
+- 完整音频录制后一次性识别
+- 适用于音频文件转写、离线处理等场景
+- 详细文档：[一句话识别说明](docs/oneshot_asr.md)
+
 ### 连接方式
 
-**地址**: `ws://localhost:8000/asr?samplerate=16000`
+**流式识别地址**: `ws://localhost:8000/sttRealtime?samplerate=16000`
 
 **参数**:
 - `samplerate`: 音频采样率（支持 8000, 16000, 22050, 44100 等）
+
+**一句话识别地址**: `ws://localhost:8000/oneshot`（无需参数）
 
 ### 通信协议
 
@@ -440,7 +452,7 @@ import wave
 import json
 
 async def test_asr():
-    uri = "ws://localhost:8000/asr?samplerate=16000"
+    uri = "ws://localhost:8000/sttRealtime?samplerate=16000"
     
     async with websockets.connect(uri) as websocket:
         # 发送音频文件
@@ -464,7 +476,7 @@ asyncio.run(test_asr())
 #### JavaScript 客户端
 
 ```javascript
-const socket = new WebSocket('ws://localhost:8000/asr?samplerate=16000');
+const socket = new WebSocket('ws://localhost:8000/sttRealtime?samplerate=16000');
 
 socket.onopen = function(event) {
     console.log('连接已建立');

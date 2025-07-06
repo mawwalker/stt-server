@@ -214,10 +214,6 @@ void ServerConfig::load_from_args(int argc, char* argv[]) {
         else if (arg == "--max-connections" && i + 1 < argc) {
             server_settings_.max_connections = std::stoi(argv[++i]);
         }
-        // ASR配置
-        else if (arg == "--asr-pool-size" && i + 1 < argc) {
-            asr_config_.pool_size = std::stoi(argv[++i]);
-        }
         else if (arg == "--asr-threads" && i + 1 < argc) {
             asr_config_.num_threads = std::stoi(argv[++i]);
         }
@@ -405,7 +401,6 @@ void ServerConfig::print_usage(const char* program_name) {
     std::cout << "  --max-connections NUM          Maximum concurrent connections (default: 100)" << std::endl;
     std::cout << std::endl;
     std::cout << "ASR Options:" << std::endl;
-    std::cout << "  --asr-pool-size NUM            ASR model pool size (default: 2)" << std::endl;
     std::cout << "  --asr-threads NUM              ASR threads per model (default: 2)" << std::endl;
     std::cout << "  --asr-timeout MS               ASR acquire timeout in ms (default: 5000)" << std::endl;
     std::cout << "  --asr-model NAME               ASR model name (default: sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17)" << std::endl;

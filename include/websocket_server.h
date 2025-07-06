@@ -2,6 +2,7 @@
 
 #include "asr_engine.h"
 #include "asr_session.h"
+#include "oneshot_asr_session.h"
 #include "connection_manager.h"
 #include <websocketpp/config/asio_no_tls.hpp>
 #include <websocketpp/server.hpp>
@@ -25,10 +26,13 @@ private:
     ASREngine asr_engine;
     ConnectionManager connection_manager;
     std::unordered_map<std::string, std::unique_ptr<ASRSession>> sessions;
+    std::unordered_map<std::string, std::unique_ptr<OneShotASRSession>> oneshot_sessions;
     std::mutex sessions_mutex;
+    std::mutex oneshot_sessions_mutex;
     std::unique_ptr<ServerConfig> config_;
     std::atomic<size_t> total_connections{0};
     std::atomic<size_t> active_sessions{0};
+    std::atomic<size_t> active_oneshot_sessions{0};
     
     // Performance monitoring
     std::thread monitor_thread;
@@ -50,4 +54,8 @@ private:
     void on_open(connection_hdl hdl);
     void on_close(connection_hdl hdl);
     void on_message(connection_hdl hdl, message_ptr msg);
+    
+    // Helper methods to determine session type based on URI
+    bool is_oneshot_endpoint(connection_hdl hdl);
+    std::string get_endpoint_path(connection_hdl hdl);
 };

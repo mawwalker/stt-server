@@ -132,24 +132,6 @@ void ModelManager::release_asr_recognizer(int instance_id) {
     LOG_DEBUG("MODEL_MANAGER", "Released shared ASR engine (ID: " << instance_id << ")");
 }
 
-OfflineRecognizer& ModelManager::get_asr_recognizer([[maybe_unused]] int instance_id) {
-    if (!initialized.load()) {
-        throw std::runtime_error("Model manager not initialized");
-    }
-    
-    if (!shared_asr || !shared_asr->is_initialized()) {
-        throw std::runtime_error("Shared ASR engine not available");
-    }
-    
-    // 注意：这个方法不应该在新代码中使用，因为它不是线程安全的
-    // 新代码应该使用 SharedASREngine::recognize() 方法
-    LOG_WARN("MODEL_MANAGER", "Using legacy get_asr_recognizer - consider switching to SharedASREngine::recognize()");
-    
-    // 这里我们不能直接返回共享引擎的recognizer，因为它不是线程安全的
-    // 为了向后兼容，我们抛出异常提示用户使用新接口
-    throw std::runtime_error("Legacy get_asr_recognizer() is deprecated. Use SharedASREngine::recognize() instead.");
-}
-
 std::unique_ptr<VoiceActivityDetector> ModelManager::create_vad_instance() const {
     if (!initialized.load()) {
         LOG_ERROR("MODEL_MANAGER", "Model manager not initialized");

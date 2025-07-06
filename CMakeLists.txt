@@ -203,6 +203,7 @@ add_executable(websocket_asr_server
     main.cpp
     src/asr_engine.cpp
     src/asr_session.cpp
+    src/oneshot_asr_session.cpp
     src/websocket_server.cpp
     src/logger.cpp
     src/model_pool.cpp

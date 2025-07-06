@@ -160,7 +160,6 @@ public:
     // ASR接口 - 重定向到共享引擎
     int acquire_asr_recognizer(int timeout_ms = 5000);
     void release_asr_recognizer(int instance_id);
-    sherpa_onnx::cxx::OfflineRecognizer& get_asr_recognizer(int instance_id);
     
     // VAD接口
     std::unique_ptr<sherpa_onnx::cxx::VoiceActivityDetector> create_vad_instance() const;
