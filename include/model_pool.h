@@ -94,7 +94,7 @@ public:
     std::string recognize(const float* samples, size_t sample_count);
     std::string recognize_with_metadata(const float* samples, size_t sample_count, 
                                       std::string& language, std::string& emotion, 
-                                      std::string& event, std::vector<float>& timestamps);
+                                      std::string& event, std::vector<float>& timestamps, std::vector<std::string>& tokens);
     
     // 获取统计信息
     size_t get_active_recognitions() const { return active_recognitions.load(); }

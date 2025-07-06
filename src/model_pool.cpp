@@ -245,7 +245,7 @@ std::string SharedASREngine::recognize(const float* samples, size_t sample_count
 
 std::string SharedASREngine::recognize_with_metadata(const float* samples, size_t sample_count, 
                                                    std::string& language, std::string& emotion, 
-                                                   std::string& event, std::vector<float>& timestamps) {
+                                                   std::string& event, std::vector<float>& timestamps, std::vector<std::string>& tokens) {
     if (!initialized.load()) {
         LOG_ERROR("SHARED_ASR", "Shared ASR engine not initialized");
         return "";
@@ -267,6 +267,7 @@ std::string SharedASREngine::recognize_with_metadata(const float* samples, size_
         emotion = result.emotion;
         event = result.event;
         timestamps = result.timestamps;
+        tokens = result.tokens;
         
         return result.text;
         

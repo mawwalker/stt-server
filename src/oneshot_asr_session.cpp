@@ -138,6 +138,7 @@ void OneShotASRSession::process_complete_audio() {
         // 使用共享ASR引擎进行识别，支持元数据
         std::string language, emotion, event;
         std::vector<float> timestamps;
+        std::vector<std::string> tokens;
         
         std::string text = shared_asr->recognize_with_metadata(
             audio_buffer.data(), 
@@ -145,7 +146,8 @@ void OneShotASRSession::process_complete_audio() {
             language,
             emotion, 
             event,
-            timestamps
+            timestamps,
+            tokens
         );
         
         if (text.empty()) {
@@ -161,6 +163,7 @@ void OneShotASRSession::process_complete_audio() {
         asr_result.lang = language.empty() ? "auto" : language;
         asr_result.emotion = emotion;
         asr_result.event = event;
+        asr_result.tokens = tokens;
         
         // 添加时间戳信息
         if (!timestamps.empty()) {

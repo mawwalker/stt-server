@@ -20,8 +20,9 @@
 ## 🚀 功能特性
 
 - **实时流式语音识别** - 基于 SenseVoice 模型的多语言识别
-- **🆕 一句话识别** - 完整音频录制后进行一次性识别，适用于离线处理
-- **WebSocket 接口** - 兼容现有的 Python 客户端
+- **🆕 OneShot一句话识别** - 完整音频录制后进行一次性识别，支持语言检测、情感分析
+- **双端点支持** - `/sttRealtime`(流式) + `/oneshot`(一句话)
+- **WebSocket 接口** - 兼容现有的 Python 客户端，支持两种识别模式
 - **多语言支持** - 中文、英文、日文、韩文、粤语
 - **内置 VAD** - Silero VAD 语音活动检测
 - **高并发** - 支持多客户端同时连接
@@ -404,40 +405,101 @@ docker logs -f websocket-asr-server
 
 ## 🌐 WebSocket接口
 
+## 🌐 WebSocket接口
+
 ### 接口端点
 
 **流式识别**: `ws://localhost:8000/sttRealtime?samplerate=16000`
 - 实时流式语音识别，边说边识别
 - 适用于实时对话、语音助手等场景
 
-**一句话识别**: `ws://localhost:8000/oneshot`
-- 完整音频录制后一次性识别
-- 适用于音频文件转写、离线处理等场景
-- 详细文档：[一句话识别说明](docs/oneshot_asr.md)
+**OneShot一句话识别**: `ws://localhost:8000/oneshot`
+- 完整音频录制后一次性识别，支持语言检测、情感分析
+- 适用于音频文件转写、语音命令识别等场景
+- 详细文档：[OneShot识别指南](ONESHOT_GUIDE.md)
 
-### 连接方式
+### 客户端使用
 
-**流式识别地址**: `ws://localhost:8000/sttRealtime?samplerate=16000`
+#### 快速测试
 
-**参数**:
-- `samplerate`: 音频采样率（支持 8000, 16000, 22050, 44100 等）
+```bash
+# 流式识别 - 音频文件
+python websocket_client.py --mode streaming --file examples/test.mp3
 
-**一句话识别地址**: `ws://localhost:8000/oneshot`（无需参数）
+# 流式识别 - 麦克风（持续录音）
+python websocket_client.py --mode streaming --mic
+
+# OneShot识别 - 音频文件（一次性处理）
+python websocket_client.py --mode oneshot --file examples/test.mp3
+
+# OneShot识别 - 麦克风（录音5秒后识别）
+python websocket_client.py --mode oneshot --mic --duration 5
+
+# 交互式测试（对比两种模式）
+python oneshot_examples.py
+```
+
+#### 参数说明
+
+- `--mode`: 识别模式 (`streaming`|`oneshot`)
+- `--file`: 音频文件路径
+- `--mic`: 使用麦克风输入
+- `--duration`: 录音时长（秒）
+- `--sample-rate`: 音频采样率（默认16000）
 
 ### 通信协议
 
-**发送数据**: PCM 音频数据（16位，单声道，指定采样率）
+#### 流式识别协议
 
-**接收数据**: JSON 格式的识别结果
+**连接**: `ws://localhost:8000/sttRealtime?samplerate=16000`
+**发送**: 二进制音频数据（16-bit PCM）
+**接收**: JSON格式结果
 
 ```json
 {
-    "text": "Hello world",
-    "finished": false,     // true=最终结果，false=部分结果
-    "idx": 0,              // 语音段索引
-    "lang": "zh",           // 语言
-    "timestamp": [0.1, 0.2], // 时间戳（可选）
-    "tokens": ["Hello", "world"]
+    "text": "识别的文本",
+    "finished": false,    // true=最终结果，false=部分结果
+    "idx": 0,            // 语音段索引  
+    "lang": "zh"         // 语言代码
+}
+```
+
+#### OneShot识别协议
+
+**连接**: `ws://localhost:8000/oneshot`
+
+**发送控制消息**:
+```json
+{"command": "start"}    // 开始录音
+{"command": "stop"}     // 停止录音并处理
+```
+
+**发送音频**: 二进制音频数据（16-bit PCM）
+
+**接收消息**:
+```json
+// 状态消息
+{
+    "type": "status",
+    "status": "ready"    // ready|recording|processing|finished
+}
+
+// 识别结果（包含更多元数据）
+{
+    "type": "result", 
+    "text": "识别的文本",
+    "finished": true,
+    "idx": 0,
+    "lang": "zh",           // 检测到的语言
+    "emotion": "neutral",   // 情感信息
+    "event": "",           // 事件信息
+    "timestamps": [...]    // 时间戳数组
+}
+
+// 错误消息
+{
+    "type": "error",
+    "message": "错误描述"
 }
 ```
 

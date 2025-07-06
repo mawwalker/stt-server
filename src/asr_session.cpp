@@ -170,11 +170,12 @@ void ASRSession::process_speech_segment_shared(const SpeechSegment& segment) {
     try {
         std::string language, emotion, event;
         std::vector<float> timestamps;
+        std::vector<std::string> tokens;
         
         // 使用共享ASR引擎进行识别，无需获取/释放实例
         std::string text = shared_asr->recognize_with_metadata(
             segment.samples.data(), segment.samples.size(),
-            language, emotion, event, timestamps);
+            language, emotion, event, timestamps, tokens);
         
         if (!text.empty()) {
             int current_segment_id = segment_id.fetch_add(1);
@@ -190,6 +191,7 @@ void ASRSession::process_speech_segment_shared(const SpeechSegment& segment) {
             asr_result.emotion = emotion;
             asr_result.event = event;
             asr_result.timestamps = timestamps;
+            asr_result.tokens = tokens;
             
             send_result(asr_result);
         }
@@ -210,11 +212,12 @@ void ASRSession::perform_recognition_shared(bool is_final) {
     try {
         std::string language, emotion, event;
         std::vector<float> timestamps;
+        std::vector<std::string> tokens;
         
         // 使用共享ASR引擎进行识别，获取完整元数据
         std::string text = shared_asr->recognize_with_metadata(
             buffer.data(), buffer.size(),
-            language, emotion, event, timestamps);
+            language, emotion, event, timestamps, tokens);
         
         if (!text.empty()) {
             ASRResult asr_result;
@@ -225,6 +228,7 @@ void ASRSession::perform_recognition_shared(bool is_final) {
             asr_result.emotion = emotion;
             asr_result.event = event;
             asr_result.timestamps = timestamps;
+            asr_result.tokens = tokens;
             
             send_result(asr_result);
             
