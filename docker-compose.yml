@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   websocket-asr-server:
+    build: .
     image: websocket-asr-server:latest
     container_name: websocket-asr-server
     ports:

@@ -8,6 +8,20 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# 检测并设置Docker Compose命令
+detect_docker_compose() {
+    if command -v "docker" >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+        echo "docker compose"
+    elif command -v "docker-compose" >/dev/null 2>&1; then
+        echo "docker-compose"
+    else
+        echo ""
+    fi
+}
+
+# 设置Docker Compose命令
+DOCKER_COMPOSE_CMD=$(detect_docker_compose)
+
 # 加载环境变量
 if [ -f ".env" ]; then
     echo "Loading configuration from .env file..."
@@ -24,7 +38,7 @@ WebSocket ASR Server 统一启动脚本
 
 命令:
     local       本地启动（直接运行二进制文件）
-    docker      Docker启动（使用docker-compose）
+    docker      Docker启动（使用Docker Compose）
     build       编译项目
     clean       清理构建文件
     stop        停止Docker服务
@@ -135,6 +149,15 @@ start_local() {
 start_docker() {
     echo "Starting WebSocket ASR Server with Docker..."
     
+    # 检查Docker Compose命令是否可用
+    if [ -z "$DOCKER_COMPOSE_CMD" ]; then
+        echo "Error: Neither 'docker compose' nor 'docker-compose' is available."
+        echo "Please install Docker Compose first."
+        exit 1
+    fi
+    
+    echo "Using Docker Compose command: $DOCKER_COMPOSE_CMD"
+    
     local REBUILD=false
     
     # 解析参数
@@ -164,12 +187,12 @@ start_docker() {
     # 构建Docker镜像（如果需要）
     if [ "$REBUILD" = "true" ]; then
         echo "Rebuilding Docker image..."
-        docker-compose build --no-cache
+        $DOCKER_COMPOSE_CMD build --no-cache
     fi
     
     # 启动服务
     echo "Starting Docker services..."
-    docker-compose --env-file "${ENV_FILE:-.env}" up -d
+    $DOCKER_COMPOSE_CMD --env-file "${ENV_FILE:-.env}" up -d
     
     echo "Docker services started!"
     echo "Server URL: http://localhost:${SERVER_PORT:-8000}"
@@ -183,19 +206,32 @@ start_docker() {
 # 停止Docker服务
 stop_docker() {
     echo "Stopping Docker services..."
-    docker-compose down
+    
+    # 检查Docker Compose命令是否可用
+    if [ -z "$DOCKER_COMPOSE_CMD" ]; then
+        echo "Error: Neither 'docker compose' nor 'docker-compose' is available."
+        exit 1
+    fi
+    
+    $DOCKER_COMPOSE_CMD down
     echo "Docker services stopped."
 }
 
 # 查看Docker日志
 show_logs() {
-    if [ ! "$(docker-compose ps -q)" ]; then
+    # 检查Docker Compose命令是否可用
+    if [ -z "$DOCKER_COMPOSE_CMD" ]; then
+        echo "Error: Neither 'docker compose' nor 'docker-compose' is available."
+        exit 1
+    fi
+    
+    if [ ! "$($DOCKER_COMPOSE_CMD ps -q)" ]; then
         echo "No running Docker services found."
         exit 1
     fi
     
     echo "Showing Docker logs (Press Ctrl+C to exit)..."
-    docker-compose logs -f
+    $DOCKER_COMPOSE_CMD logs -f
 }
 
 # 查看服务状态
@@ -218,14 +254,15 @@ show_status() {
     
     echo ""
     echo "=== Docker Status ==="
-    if command -v docker-compose >/dev/null 2>&1; then
+    if [ -n "$DOCKER_COMPOSE_CMD" ]; then
+        echo "✓ Docker Compose available: $DOCKER_COMPOSE_CMD"
         if [ -f "docker-compose.yml" ]; then
             echo "✓ docker-compose.yml exists"
             
             # 检查Docker服务状态
-            if docker-compose ps | grep -q "Up"; then
+            if $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
                 echo "✓ Docker services are running:"
-                docker-compose ps
+                $DOCKER_COMPOSE_CMD ps
             else
                 echo "✗ Docker services are not running"
                 echo "  Run '$0 docker' to start"
@@ -234,7 +271,8 @@ show_status() {
             echo "✗ docker-compose.yml not found"
         fi
     else
-        echo "✗ docker-compose not installed"
+        echo "✗ Docker Compose not available"
+        echo "  Neither 'docker compose' nor 'docker-compose' found"
     fi
     
     echo ""
