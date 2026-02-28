@@ -54,16 +54,9 @@ show_config_info() {
 
 # 获取GCC版本并确定是否使用共享库
 get_shared_libs_option() {
-    if command -v gcc &> /dev/null; then
-        local gcc_version=$(gcc -dumpversion | cut -d. -f1)
-        if [[ $gcc_version -le 10 ]]; then
-            echo "ON"
-        else
-            echo "OFF"
-        fi
-    else
-        echo "OFF"
-    fi
+    # Force shared libraries to avoid ABI/allocator conflicts with static linking
+    # This is required for compatibility with system libstdc++ and dynamic execution
+    echo "ON"
 }
 
 # 如果此脚本被直接执行，显示配置信息

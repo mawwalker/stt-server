@@ -11,6 +11,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Set script directory globally
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Function to print colored output
 print_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -40,16 +43,12 @@ check_gcc_version() {
         GCC_VERSION=$(gcc -dumpversion | cut -d. -f1)
         print_info "Detected GCC version: $GCC_VERSION"
         
-        if [[ $GCC_VERSION -le 10 ]]; then
-            print_warning "GCC version <= 10 detected. Will build shared libraries to avoid link errors."
-            USE_SHARED_LIBS=ON
-        else
-            print_info "GCC version > 10. Will build static libraries (default)."
-            USE_SHARED_LIBS=OFF
-        fi
+        # Force shared libraries to avoid ABI/allocator conflicts with static linking
+        print_info "Using Shared Libraries build to ensure ABI compatibility."
+        USE_SHARED_LIBS=ON
     else
-        print_warning "GCC not found. Using default build configuration."
-        USE_SHARED_LIBS=OFF
+        print_warning "GCC not found. Using default shared build configuration."
+        USE_SHARED_LIBS=ON
     fi
 }
 
@@ -179,7 +178,7 @@ install_sherpa_onnx() {
     print_info "Configuring with CMake..."
     
     # Load unified configuration
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # Load unified configuration using global script directory
     source "$SCRIPT_DIR/sherpa_config.sh"
     
     # Generate CMake options using unified configuration

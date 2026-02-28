@@ -48,7 +48,7 @@ set(SHERPA_ONNX_SEARCH_PATHS
     /usr/lib
 )
 set(SHERPA_ONNX_INCLUDE_PATHS 
-    $ENV{HOME}/.local/include 
+    $ENV{HOME}/.local/include
     /usr/local/include 
     /usr/include
 )
@@ -81,14 +81,14 @@ else()
         find_library(SHERPA_ONNX_KALDIFST_LIB sherpa-onnx-kaldifst-core PATHS ${SHERPA_ONNX_SEARCH_PATHS})
         
         # Find additional required dependencies
-        find_library(ONNXRUNTIME_LIB onnxruntime PATHS ${SHERPA_ONNX_SEARCH_PATHS})
-        find_library(KALDI_DECODER_LIB kaldi-decoder-core PATHS ${SHERPA_ONNX_SEARCH_PATHS})
-        find_library(KALDI_NATIVE_FBANK_LIB kaldi-native-fbank-core PATHS ${SHERPA_ONNX_SEARCH_PATHS})
-        find_library(SSENTENCEPIECE_LIB ssentencepiece_core PATHS ${SHERPA_ONNX_SEARCH_PATHS})
-        find_library(ESPEAK_NG_LIB espeak-ng PATHS ${SHERPA_ONNX_SEARCH_PATHS})
-        find_library(PIPER_PHONEMIZE_LIB piper_phonemize PATHS ${SHERPA_ONNX_SEARCH_PATHS})
-        find_library(KISSFFT_LIB kissfft-float PATHS ${SHERPA_ONNX_SEARCH_PATHS})
-        find_library(UCD_LIB ucd PATHS ${SHERPA_ONNX_SEARCH_PATHS})
+        find_library(ONNXRUNTIME_LIB onnxruntime PATHS ${SHERPA_ONNX_SEARCH_PATHS} NO_DEFAULT_PATH)
+        find_library(KALDI_DECODER_LIB kaldi-decoder-core PATHS ${SHERPA_ONNX_SEARCH_PATHS} NO_DEFAULT_PATH)
+        find_library(KALDI_NATIVE_FBANK_LIB kaldi-native-fbank-core PATHS ${SHERPA_ONNX_SEARCH_PATHS} NO_DEFAULT_PATH)
+        find_library(SSENTENCEPIECE_LIB ssentencepiece_core PATHS ${SHERPA_ONNX_SEARCH_PATHS} NO_DEFAULT_PATH)
+        find_library(ESPEAK_NG_LIB espeak-ng PATHS ${SHERPA_ONNX_SEARCH_PATHS} NO_DEFAULT_PATH)
+        find_library(PIPER_PHONEMIZE_LIB piper_phonemize PATHS ${SHERPA_ONNX_SEARCH_PATHS} NO_DEFAULT_PATH)
+        find_library(KISSFFT_LIB kissfft-float PATHS ${SHERPA_ONNX_SEARCH_PATHS} NO_DEFAULT_PATH)
+        find_library(UCD_LIB ucd PATHS ${SHERPA_ONNX_SEARCH_PATHS} NO_DEFAULT_PATH)
         
         # Find include directory
         find_path(SHERPA_ONNX_INCLUDE_DIR
@@ -97,18 +97,19 @@ else()
             DOC "sherpa-onnx include directory"
         )
         
-        if(SHERPA_ONNX_CORE_LIB AND SHERPA_ONNX_CXX_API_LIB AND SHERPA_ONNX_INCLUDE_DIR)
-            # Filter out empty/not found libraries
-            set(SHERPA_ONNX_LIBRARIES "")
-            foreach(lib ${SHERPA_ONNX_CXX_API_LIB} ${SHERPA_ONNX_C_API_LIB} ${SHERPA_ONNX_CORE_LIB} 
-                         ${SHERPA_ONNX_FST_LIB} ${SHERPA_ONNX_FSTFAR_LIB} ${SHERPA_ONNX_KALDIFST_LIB}
-                         ${ONNXRUNTIME_LIB} ${KALDI_DECODER_LIB} ${KALDI_NATIVE_FBANK_LIB}
-                         ${SSENTENCEPIECE_LIB} ${ESPEAK_NG_LIB} ${PIPER_PHONEMIZE_LIB}
-                         ${KISSFFT_LIB} ${UCD_LIB})
-                if(lib AND NOT lib STREQUAL "lib-NOTFOUND")
-                    list(APPEND SHERPA_ONNX_LIBRARIES ${lib})
-                endif()
-            endforeach()
+        if(SHERPA_ONNX_CXX_API_LIB AND SHERPA_ONNX_C_API_LIB AND SHERPA_ONNX_INCLUDE_DIR)
+            # Add RPATH to allow running without LD_LIBRARY_PATH
+            # Include both local user dir (for development) and system dir (for Docker)
+            set(CMAKE_INSTALL_RPATH "$ENV{HOME}/.local/lib;/usr/local/lib")
+            set(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+
+            # Link only the API shared libraries and ONNX Runtime
+            # The API libraries handle their own dependencies internally
+            set(SHERPA_ONNX_LIBRARIES 
+                ${SHERPA_ONNX_CXX_API_LIB}
+                ${SHERPA_ONNX_C_API_LIB}
+                ${ONNXRUNTIME_LIB}
+            )
             
             set(SHERPA_ONNX_INCLUDE_DIRS ${SHERPA_ONNX_INCLUDE_DIR})
             set(SHERPA_ONNX_FOUND TRUE)
